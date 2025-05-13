@@ -40,6 +40,72 @@ TradeForge follows a microservices architecture with the following key component
 - Performance analytics and reporting
 - Autonomous operation based on market signals
 
+## Installation
+
+### Prerequisites
+
+- Python 3.9 or higher
+- pip (Python package manager)
+- Git
+- AWS CLI (for cloud deployment)
+- TA-Lib (optional, for technical analysis)
+
+### Local Development Setup
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/yourusername/tradeforge.git
+   cd tradeforge
+   ```
+
+2. **Create and activate a virtual environment**
+
+   ```bash
+   # On Linux/macOS
+   python -m venv venv
+   source venv/bin/activate
+
+   # On Windows
+   python -m venv venv
+   venv\Scripts\activate
+   ```
+
+3. **Install dependencies**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+   Note: If you encounter issues with TA-Lib installation:
+   - On Ubuntu/Debian: `sudo apt-get install ta-lib`
+   - On macOS: `brew install ta-lib`
+   - On Windows: Download and install from [TA-Lib website](http://ta-lib.org/hdr_dw.html)
+
+4. **Set up environment variables**
+
+   Create a `.env` file in the project root:
+
+   ```
+   # API Keys
+   GEMINI_API_KEY=your_api_key
+   GEMINI_API_SECRET=your_api_secret
+   
+   # Environment
+   USE_SANDBOX=True
+   ```
+
+5. **Test the installation**
+
+   ```bash
+   # Test market data retrieval
+   python scripts/test_gemini_data.py --symbol btcusd
+   ```
+
+### AWS Deployment (Coming Soon)
+
+Instructions for deploying TradeForge to AWS will be provided in future updates.
+
 ## Project Structure
 
 ```
@@ -59,11 +125,19 @@ tradeforge/
 
 ## Getting Started
 
-[Coming soon]
+### Running Your First Strategy
+
+Documentation on creating and running trading strategies will be available soon.
 
 ## Development
 
-[Coming soon]
+### Adding a New Data Provider
+
+To add a new market data provider, create a new class that implements the `MarketDataProvider` interface in `src/data/base.py`.
+
+### Adding a New Broker
+
+To add a new broker for order execution, create a new class that implements the `Broker` interface in `src/execution/base.py`.
 
 ## License
 
