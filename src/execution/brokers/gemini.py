@@ -126,9 +126,8 @@ class GeminiBroker(Broker):
                          quantity: float, price: Optional[float] = None,
                          time_in_force: str = "GTC", **kwargs) -> Dict[str, Any]:
         # Map our order types to Gemini order types
-        # Gemini uses different order type format than some other exchanges
+        # Gemini doesn't directly support market orders - they must be implemented as immediate-or-cancel limit orders
         gemini_order_types = {
-            OrderType.MARKET: "market",
             OrderType.LIMIT: "exchange limit",
             # Gemini doesn't directly support stop orders in the same way
             OrderType.STOP: "stop",
@@ -139,11 +138,30 @@ class GeminiBroker(Broker):
             "symbol": symbol,
             "amount": str(quantity),
             "side": side.value,
-            "type": gemini_order_types.get(order_type, "exchange limit")
         }
         
-        if order_type in [OrderType.LIMIT, OrderType.STOP_LIMIT] and price is not None:
-            payload["price"] = str(price)
+        # Handle market orders as immediate-or-cancel limit orders
+        # For buy orders: use a high price to ensure execution
+        # For sell orders: use a low price to ensure execution
+        if order_type == OrderType.MARKET:
+            # Get current ticker to determine appropriate price
+            ticker_endpoint = f"/v1/pubticker/{symbol}"
+            ticker_data = await self._make_public_request(ticker_endpoint)
+            
+            if side == OrderSide.BUY:
+                # Use a price significantly higher than the current ask price
+                market_price = float(ticker_data.get("ask", "0")) * 1.05  # 5% above current ask
+            else:
+                # Use a price significantly lower than the current bid price
+                market_price = float(ticker_data.get("bid", "0")) * 0.95  # 5% below current bid
+            
+            payload["price"] = str(market_price)
+            payload["type"] = "exchange limit"
+            payload["options"] = ["immediate-or-cancel"]
+        else:
+            payload["type"] = gemini_order_types.get(order_type, "exchange limit")
+            if order_type in [OrderType.LIMIT, OrderType.STOP_LIMIT] and price is not None:
+                payload["price"] = str(price)
         
         if order_type in [OrderType.STOP, OrderType.STOP_LIMIT] and "stop_price" in kwargs:
             payload["stop_price"] = str(kwargs["stop_price"])
