@@ -72,6 +72,10 @@ class GeminiDataProvider(MarketDataProvider):
         }
     
     async def get_recent_trades(self, symbol: str, limit: int = 100) -> List[Dict[str, Any]]:
+        # Ensure limit is within Gemini's acceptable range (max 500)
+        if limit > 500:
+            limit = 500
+            
         data = await self._make_request(f"/v1/trades/{symbol}", {"limit_trades": limit})
         
         trades = []
@@ -94,7 +98,7 @@ class GeminiDataProvider(MarketDataProvider):
                          limit: int = 100) -> List[Dict[str, Any]]:
         # Gemini doesn't have a direct candle API, so we'd need to build candles from trades
         # This is a simplified implementation
-        trades = await self.get_recent_trades(symbol, 1000)  # Get more trades to build accurate candles
+        trades = await self.get_recent_trades(symbol, 500)  # Get more trades to build accurate candles
         
         # Convert interval string to seconds
         interval_seconds = self._interval_to_seconds(interval)
