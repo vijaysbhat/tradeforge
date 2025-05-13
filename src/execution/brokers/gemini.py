@@ -51,7 +51,10 @@ class GeminiBroker(Broker):
         
         # Add required fields to payload
         payload["request"] = endpoint
-        payload["nonce"] = int(time.time() * 1000)
+        
+        # Add a small offset to the nonce to account for clock differences
+        # Use milliseconds since epoch with a small offset to ensure it's within Gemini's acceptable range
+        payload["nonce"] = int(time.time() * 1000) + 500  # Add 500ms offset
         
         # Encode payload as JSON and then as base64
         encoded_payload = base64.b64encode(json.dumps(payload).encode())
@@ -68,11 +71,18 @@ class GeminiBroker(Broker):
             "Cache-Control": "no-cache"
         }
         
-        async with self.session.post(url, headers=headers) as response:
-            if response.status != 200:
-                error_text = await response.text()
-                raise Exception(f"Gemini API error: {response.status} - {error_text}")
-            return await response.json()
+        try:
+            async with self.session.post(url, headers=headers) as response:
+                response_text = await response.text()
+                if response.status != 200:
+                    # Check for nonce error and provide a more helpful message
+                    if "Nonce" in response_text and "not within" in response_text:
+                        raise Exception(f"Gemini API nonce error. Please check your system clock synchronization. Error: {response_text}")
+                    raise Exception(f"Gemini API error: {response.status} - {response_text}")
+                
+                return json.loads(response_text)
+        except aiohttp.ClientError as e:
+            raise Exception(f"Network error when connecting to Gemini API: {str(e)}")
     
     async def get_account_info(self) -> Dict[str, Any]:
         data = await self._make_private_request("/v1/account")
