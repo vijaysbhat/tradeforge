@@ -12,7 +12,7 @@ aiobotocore==2.5.4
 
 # Data handling and analysis
 ccxt==3.1.54  # For additional exchange integrations
-ta-lib==0.4.28  # Technical analysis library
+ta==0.10.2    # Pure Python technical analysis library (alternative to ta-lib)
 matplotlib==3.7.2  # For visualization
 pytz==2023.3
 
