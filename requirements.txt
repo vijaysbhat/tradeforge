@@ -5,6 +5,7 @@ python-dateutil==2.8.2
 pydantic==2.3.0
 numpy==1.24.3
 pandas==2.0.3
+python-dotenv==1.0.0  # Add this line for .env file support
 
 # AWS integration
 boto3==1.28.17  # Downgraded to be compatible with aiobotocore
