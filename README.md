@@ -16,7 +16,7 @@ TradeForge follows a microservices architecture with the following key component
 
 ### Supporting Infrastructure
 - **Monitoring & Observability**: Comprehensive metrics, logging, and alerting
-- **API Gateway**: Unified entry point for external interactions
+- **API Gateway**: Unified entry point for external interactions, handling authentication, traffic management, request routing, and protocol translation
 - **User Interface**: Web dashboard for configuration and monitoring
 
 ### AWS Services Utilized
@@ -27,8 +27,8 @@ TradeForge follows a microservices architecture with the following key component
 - EventBridge for event-driven communication
 - CloudWatch for monitoring and logging
 - SQS/SNS for message queuing and notifications
-- API Gateway for REST API exposure
-- Cognito for authentication
+- API Gateway for REST API exposure, request routing, and traffic management
+- Cognito for authentication and authorization, integrated with API Gateway
 
 ## Features
 
@@ -39,6 +39,8 @@ TradeForge follows a microservices architecture with the following key component
 - Paper trading with live price feeds
 - Real-time monitoring and alerting
 - Performance analytics and reporting
+- Secure API access with versioning and throttling
+- Third-party system integration capabilities
 
 ## Project Structure
 
