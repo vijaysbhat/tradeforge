@@ -98,6 +98,61 @@ TradeForge follows a microservices architecture with the following key component
    python scripts/test_gemini_data.py --symbol btcusd
    ```
 
+### Test Scripts
+
+* Test Gemini Data Feed
+    ```bash
+    # Basic usage with default parameters (BTC/USD)
+    python scripts/test_gemini_data.py
+
+    # Specify a different symbol
+    python scripts/test_gemini_data.py --symbol ethusd
+
+    # Show more detailed order book
+    python scripts/test_gemini_data.py --depth 10
+
+    # Show more recent trades
+    python scripts/test_gemini_data.py --trades 20
+
+    # Show different candle interval
+    python scripts/test_gemini_data.py --interval 15m
+
+    # Subscribe to live updates for 60 seconds
+    python scripts/test_gemini_data.py --live 60
+
+    # Use Gemini sandbox environment
+    python scripts/test_gemini_data.py --sandbox
+    ```
+
+* Test Gemini Trade Execution
+
+    ```bash
+    # View account information
+    python scripts/test_gemini_trading.py --action account
+
+    # View current positions
+    python scripts/test_gemini_trading.py --action positions
+
+    # List open orders
+    python scripts/test_gemini_trading.py --action orders
+
+    # Place a limit buy order
+    python scripts/test_gemini_trading.py --action buy --symbol btcusd --amount 0.01 --price 30000
+
+    # Place a limit sell order
+    python scripts/test_gemini_trading.py --action sell --symbol btcusd --amount 0.01 --price 30000
+
+    # Check order status
+    python scripts/test_gemini_trading.py --action status --order-id ORDER_ID
+
+    # Cancel an order
+    python scripts/test_gemini_trading.py --action cancel --order-id ORDER_ID
+
+    # Use sandbox environment
+    python scripts/test_gemini_trading.py --action account --sandbox
+    ```
+
+
 ### AWS Deployment (Coming Soon)
 
 Instructions for deploying TradeForge to AWS will be provided in future updates.
