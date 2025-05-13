@@ -126,12 +126,13 @@ class GeminiBroker(Broker):
                          quantity: float, price: Optional[float] = None,
                          time_in_force: str = "GTC", **kwargs) -> Dict[str, Any]:
         # Map our order types to Gemini order types
+        # Gemini uses different order type format than some other exchanges
         gemini_order_types = {
-            OrderType.MARKET: "exchange market",
+            OrderType.MARKET: "market",
             OrderType.LIMIT: "exchange limit",
             # Gemini doesn't directly support stop orders in the same way
-            OrderType.STOP: "exchange stop",
-            OrderType.STOP_LIMIT: "exchange stop limit"
+            OrderType.STOP: "stop",
+            OrderType.STOP_LIMIT: "stop_limit"
         }
         
         payload = {
