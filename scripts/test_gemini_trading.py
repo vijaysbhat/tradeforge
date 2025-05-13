@@ -203,6 +203,9 @@ async def main():
     api_key = args.api_key or os.environ.get("GEMINI_API_KEY")
     api_secret = args.api_secret or os.environ.get("GEMINI_API_SECRET")
     
+    # Check if we should use sandbox based on args or environment
+    use_sandbox = args.sandbox or os.environ.get("USE_SANDBOX", "").lower() == "true"
+    
     if not api_key or not api_secret:
         print("Error: Gemini API credentials are required. Set GEMINI_API_KEY and GEMINI_API_SECRET "
               "environment variables or provide --api-key and --api-secret arguments.")
@@ -215,10 +218,14 @@ async def main():
     gemini_broker = GeminiBroker(
         api_key=api_key,
         api_secret=api_secret,
-        sandbox=args.sandbox
+        sandbox=use_sandbox
     )
     broker_name = "gemini"
     execution_service.register_broker(broker_name, gemini_broker)
+    
+    # Display environment information
+    env_name = "SANDBOX" if use_sandbox else "PRODUCTION"
+    print(f"\n=== Using Gemini {env_name} Environment ===")
     
     try:
         # Perform the requested action
