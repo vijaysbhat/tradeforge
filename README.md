@@ -48,7 +48,6 @@ TradeForge follows a microservices architecture with the following key component
 - pip (Python package manager)
 - Git
 - AWS CLI (for cloud deployment)
-- TA-Lib (optional, for technical analysis)
 
 ### Local Development Setup
 
@@ -77,10 +76,7 @@ TradeForge follows a microservices architecture with the following key component
    pip install -r requirements.txt
    ```
 
-   Note: If you encounter issues with TA-Lib installation:
-   - On Ubuntu/Debian: `sudo apt-get install ta-lib`
-   - On macOS: `brew install ta-lib`
-   - On Windows: Download and install from [TA-Lib website](http://ta-lib.org/hdr_dw.html)
+   Note: The project uses the `ta` package for technical analysis, which is a pure Python implementation that doesn't require any external C libraries.
 
 4. **Set up environment variables**
 
