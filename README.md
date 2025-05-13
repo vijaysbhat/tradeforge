@@ -55,7 +55,7 @@ TradeForge follows a microservices architecture with the following key component
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/yourusername/tradeforge.git
+   git clone https://github.com/vijaysbhat/tradeforge.git
    cd tradeforge
    ```
 
