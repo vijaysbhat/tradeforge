@@ -109,7 +109,7 @@ async def trading_setup():
 @pytest.mark.asyncio
 async def test_sma_buy_signal_generation(trading_setup):
     """Test that the SMA strategy generates a buy signal when short MA crosses above long MA."""
-    setup = trading_setup  # Get the setup data directly
+    setup = await anext(trading_setup)  # Properly await the async generator
     trading_engine = setup["trading_engine"]
     strategy = setup["strategy"]
     
@@ -169,7 +169,7 @@ async def test_sma_buy_signal_generation(trading_setup):
 @pytest.mark.asyncio
 async def test_sma_sell_signal_generation(trading_setup):
     """Test that the SMA strategy generates a sell signal when short MA crosses below long MA."""
-    setup = trading_setup  # Get the setup data directly
+    setup = await anext(trading_setup)  # Properly await the async generator
     trading_engine = setup["trading_engine"]
     strategy = setup["strategy"]
     
@@ -233,7 +233,7 @@ async def test_sma_sell_signal_generation(trading_setup):
 @pytest.mark.asyncio
 async def test_trading_engine_processes_signal(trading_setup):
     """Test that the trading engine correctly processes a strategy signal."""
-    setup = trading_setup  # Get the setup data directly
+    setup = await anext(trading_setup)  # Properly await the async generator
     trading_engine = setup["trading_engine"]
     
     # Create a signal
@@ -267,7 +267,7 @@ async def test_trading_engine_processes_signal(trading_setup):
 @pytest.mark.asyncio
 async def test_position_update_notification(trading_setup):
     """Test that position updates are correctly processed by the strategy."""
-    setup = trading_setup  # Get the setup data directly
+    setup = await anext(trading_setup)  # Properly await the async generator
     trading_engine = setup["trading_engine"]
     strategy = setup["strategy"]
     
@@ -297,7 +297,7 @@ async def test_position_update_notification(trading_setup):
 @pytest.mark.asyncio
 async def test_account_update_notification(trading_setup):
     """Test that account updates are correctly processed by the strategy."""
-    setup = trading_setup  # Get the setup data directly
+    setup = await anext(trading_setup)  # Properly await the async generator
     trading_engine = setup["trading_engine"]
     strategy = setup["strategy"]
     
@@ -327,7 +327,7 @@ async def test_account_update_notification(trading_setup):
 @pytest.mark.asyncio
 async def test_order_update_notification(trading_setup):
     """Test that order updates are correctly processed by the strategy."""
-    setup = trading_setup  # Get the setup data directly
+    setup = await anext(trading_setup)  # Properly await the async generator
     trading_engine = setup["trading_engine"]
     strategy = setup["strategy"]
     
