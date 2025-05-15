@@ -138,8 +138,8 @@ class TradingEngine:
         self.running = True
         self.logger.info("Starting trading engine")
         
-        # Start the main loop
-        asyncio.create_task(self._main_loop())
+        # Start the main loop and store the task
+        self.main_loop_task = asyncio.create_task(self._main_loop())
     
     async def stop(self) -> None:
         """Stop the trading engine."""
@@ -160,6 +160,19 @@ class TradingEngine:
         
         self.logger.info("Closing all execution services")
         await self.execution_service.close_all()
+        
+        # Wait for the main loop task to complete
+        if hasattr(self, 'main_loop_task') and not self.main_loop_task.done():
+            try:
+                # Give the task a short time to complete gracefully
+                await asyncio.wait_for(self.main_loop_task, timeout=1.0)
+            except asyncio.TimeoutError:
+                # Cancel the task if it doesn't complete in time
+                self.main_loop_task.cancel()
+                try:
+                    await self.main_loop_task
+                except asyncio.CancelledError:
+                    pass
         
         self.logger.info("Trading engine stopped")
     

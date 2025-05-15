@@ -108,8 +108,11 @@ async def trading_setup():
         "strategy_service": strategy_service
     }
     
-    # Stop the trading engine
+    # Stop the trading engine and ensure all tasks are cleaned up
     await trading_engine.stop()
+    
+    # Allow a short time for any remaining tasks to clean up
+    await asyncio.sleep(0.1)
 
 
 @pytest.mark.asyncio
