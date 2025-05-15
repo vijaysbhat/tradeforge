@@ -203,7 +203,7 @@ class TradingEngine:
                                     bid=float(ticker_data.get("bid", 0)),
                                     ask=float(ticker_data.get("ask", 0)),
                                     last=float(ticker_data.get("price", 0)),
-                                    volume=float(ticker_data.get("volume", 0)),
+                                    volume_24h=float(ticker_data.get("volume", 0)),
                                     timestamp=datetime.datetime.now()
                                 )
                                 self._ticker_callback(ticker, symbol, provider)
@@ -260,7 +260,7 @@ class TradingEngine:
                                     if event.get("type") == "trade":
                                         trade = Trade(
                                             symbol=symbol,
-                                            id=str(event.get("tid", "")),
+                                            trade_id=str(event.get("tid", "")),
                                             price=float(event.get("price", 0)),
                                             amount=float(event.get("amount", 0)),
                                             side="buy" if event.get("makerSide") == "sell" else "sell",
