@@ -8,7 +8,7 @@
     "modules": {
       "src.execution.brokers.gemini": "DEBUG",
       "src.data.providers.gemini": "DEBUG",
-      "src.engine.trading_engine": "INFO"
+      "src.engine.trading_engine": "DEBUG"
     }
   },
   "strategies": {

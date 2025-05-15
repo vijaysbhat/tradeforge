@@ -16,15 +16,7 @@ from strategies.simple_moving_average import SimpleMovingAverageStrategy
 
 
 @pytest.fixture
-async def trading_setup():
-    """Set up the test environment."""
-    # Configure logging to show messages during tests
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        force=True  # Override any existing configuration
-    )
-    
+async def trading_setup():    
     # Create mock services
     data_service = Mock(spec=DataService)
     execution_service = Mock(spec=ExecutionService)
