@@ -126,10 +126,25 @@ async def trading_setup():
     
     # Clean up logging handlers to prevent "I/O operation on closed file" errors
     root_logger = logging.getLogger()
-    print("Logger", root_logger)
     for handler in root_logger.handlers[:]:
         handler.close()
         root_logger.removeHandler(handler)
+    
+    # Make sure all tasks are properly cleaned up
+    remaining_tasks = [t for t in asyncio.all_tasks() 
+                      if t is not asyncio.current_task() and not t.done()]
+    
+    if remaining_tasks:
+        # Log information about remaining tasks for debugging
+        for task in remaining_tasks:
+            task_name = task.get_name()
+            task_coro = task.get_coro().__qualname__ if hasattr(task.get_coro(), '__qualname__') else str(task.get_coro())
+            logging.debug(f"Cancelling remaining task: {task_name} - {task_coro}")
+            task.cancel()
+        
+        # Wait for all tasks to be cancelled with a timeout
+        if remaining_tasks:
+            await asyncio.wait(remaining_tasks, timeout=0.5)
 
 
 @pytest.mark.asyncio

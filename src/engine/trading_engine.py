@@ -90,6 +90,11 @@ class TradingEngine:
         current_task = asyncio.current_task()
         if current_task:
             current_task.set_name(f"TradingEngine_execute_signal_{signal.symbol}")
+        
+        # Check if we're still running before executing
+        if not self.running:
+            self.logger.warning("Trading engine stopped, not executing signal")
+            return
             
         try:
             # Place the order
@@ -184,15 +189,19 @@ class TradingEngine:
         # Cancel any other pending tasks created by this engine
         tasks = [t for t in asyncio.all_tasks() 
                 if t is not asyncio.current_task() and 
-                t.get_name().startswith('TradingEngine_')]
+                (t.get_name().startswith('TradingEngine_') or 
+                 'TradingEngine' in str(t.get_coro()))]
         
         if tasks:
             self.logger.debug(f"Cancelling {len(tasks)} remaining engine tasks")
             for task in tasks:
                 task.cancel()
             
-            # Wait for all tasks to be cancelled
-            await asyncio.gather(*tasks, return_exceptions=True)
+            # Wait for all tasks to be cancelled with a timeout
+            try:
+                await asyncio.wait(tasks, timeout=1.0)
+            except Exception as e:
+                self.logger.debug(f"Error waiting for tasks to cancel: {e}")
         
         self.logger.info("Trading engine stopped")
     
