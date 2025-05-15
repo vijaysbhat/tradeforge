@@ -41,16 +41,19 @@ def load_config(config_file: str = "config.json") -> Dict[str, Any]:
     except ImportError:
         logger.warning("python-dotenv not installed, skipping .env file loading")
     
-    # Log environment variables (masked for security)
+    # Get environment variables for API keys
     gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
     gemini_api_secret = os.environ.get("GEMINI_API_SECRET", "")
     gemini_sandbox_api_key = os.environ.get("GEMINI_SANDBOX_API_KEY", "")
     gemini_sandbox_api_secret = os.environ.get("GEMINI_SANDBOX_API_SECRET", "")
+    use_sandbox = os.environ.get("USE_SANDBOX", "true").lower() == "true"
     
+    # Log environment variables (masked for security)
     logger.info(f"GEMINI_API_KEY: {'*' * min(5, len(gemini_api_key))}{'*' * 5 if gemini_api_key else 'Not set'}")
     logger.info(f"GEMINI_API_SECRET: {'*' * min(5, len(gemini_api_secret))}{'*' * 5 if gemini_api_secret else 'Not set'}")
     logger.info(f"GEMINI_SANDBOX_API_KEY: {'*' * min(5, len(gemini_sandbox_api_key))}{'*' * 5 if gemini_sandbox_api_key else 'Not set'}")
     logger.info(f"GEMINI_SANDBOX_API_SECRET: {'*' * min(5, len(gemini_sandbox_api_secret))}{'*' * 5 if gemini_sandbox_api_secret else 'Not set'}")
+    logger.info(f"USE_SANDBOX: {use_sandbox}")
     
     try:
         with open(config_file, 'r') as f:
@@ -83,25 +86,9 @@ def load_config(config_file: str = "config.json") -> Dict[str, Any]:
     except FileNotFoundError:
         logger.warning(f"Config file {config_file} not found, using default configuration")
         default_config = {
-            "data_providers": {
-                "gemini": {
-                    "api_key": gemini_api_key,
-                    "api_secret": gemini_api_secret,
-                    "sandbox_api_key": gemini_sandbox_api_key,
-                    "sandbox_api_secret": gemini_sandbox_api_secret,
-                    "sandbox": True
-                }
-            },
-            "brokers": {
-                "gemini": {
-                    "api_key": gemini_api_key,
-                    "api_secret": gemini_api_secret,
-                    "sandbox_api_key": gemini_sandbox_api_key,
-                    "sandbox_api_secret": gemini_sandbox_api_secret,
-                    "sandbox": True
-                }
-            },
-            "use_sandbox": True,  # Global sandbox mode flag
+            "providers": ["gemini"],
+            "brokers": ["gemini"],
+            "use_sandbox": use_sandbox,  # Use value from environment variable
             "strategies": {
                 "simple_moving_average": {
                     "symbol": "BTCUSD",
@@ -163,19 +150,16 @@ async def setup_services(config: Dict[str, Any]):
     use_sandbox = config.get("use_sandbox", True)
     
     # Register data providers
-    for provider_name, provider_config in config.get("data_providers", {}).items():
+    for provider_name in config.get("providers", ["gemini"]):
         if provider_name == "gemini":
-            # Determine if we're using sandbox mode
-            sandbox_mode = provider_config.get("sandbox", use_sandbox)
-            
             # Select the appropriate API keys based on sandbox mode
-            if sandbox_mode:
-                api_key = provider_config.get("sandbox_api_key", "")
-                api_secret = provider_config.get("sandbox_api_secret", "")
+            if use_sandbox:
+                api_key = gemini_sandbox_api_key
+                api_secret = gemini_sandbox_api_secret
                 logger.info(f"Using sandbox API keys for {provider_name} data provider")
             else:
-                api_key = provider_config.get("api_key", "")
-                api_secret = provider_config.get("api_secret", "")
+                api_key = gemini_api_key
+                api_secret = gemini_api_secret
                 logger.info(f"Using production API keys for {provider_name} data provider")
             
             # Log key information (masked)
@@ -185,25 +169,22 @@ async def setup_services(config: Dict[str, Any]):
             provider = GeminiDataProvider(
                 api_key=api_key,
                 api_secret=api_secret,
-                sandbox=sandbox_mode
+                sandbox=use_sandbox
             )
             data_service.register_provider(provider_name, provider)
             logger.info(f"Registered data provider: {provider_name} (sandbox: {provider.sandbox})")
     
     # Register brokers
-    for broker_name, broker_config in config.get("brokers", {}).items():
+    for broker_name in config.get("brokers", ["gemini"]):
         if broker_name == "gemini":
-            # Determine if we're using sandbox mode
-            sandbox_mode = broker_config.get("sandbox", use_sandbox)
-            
             # Select the appropriate API keys based on sandbox mode
-            if sandbox_mode:
-                api_key = broker_config.get("sandbox_api_key", "")
-                api_secret = broker_config.get("sandbox_api_secret", "")
+            if use_sandbox:
+                api_key = gemini_sandbox_api_key
+                api_secret = gemini_sandbox_api_secret
                 logger.info(f"Using sandbox API keys for {broker_name} broker")
             else:
-                api_key = broker_config.get("api_key", "")
-                api_secret = broker_config.get("api_secret", "")
+                api_key = gemini_api_key
+                api_secret = gemini_api_secret
                 logger.info(f"Using production API keys for {broker_name} broker")
             
             # Log key information (masked)
@@ -213,7 +194,7 @@ async def setup_services(config: Dict[str, Any]):
             broker = GeminiBroker(
                 api_key=api_key,
                 api_secret=api_secret,
-                sandbox=sandbox_mode
+                sandbox=use_sandbox
             )
             execution_service.register_broker(broker_name, broker)
             logger.info(f"Registered broker: {broker_name} (sandbox: {broker.sandbox})")
@@ -245,19 +226,19 @@ async def setup_services(config: Dict[str, Any]):
     await trading_engine.start()
     
     # Add active brokers
-    for broker_name in config.get("brokers", {}).keys():
+    for broker_name in config.get("brokers", ["gemini"]):
         await trading_engine.add_broker(broker_name)
     
     # Subscribe to market data
     for symbol in config.get("symbols", []):
-        for provider_name in config.get("data_providers", {}).keys():
+        for provider_name in config.get("providers", ["gemini"]):
             await trading_engine.subscribe_market_data(
                 provider_name, symbol, ["ticker", "trades"]
             )
     
     # Fetch historical data for strategies
     for symbol in config.get("symbols", []):
-        for provider_name in config.get("data_providers", {}).keys():
+        for provider_name in config.get("providers", ["gemini"]):
             await trading_engine.fetch_candles(
                 provider_name, symbol, "1h", limit=100
             )
