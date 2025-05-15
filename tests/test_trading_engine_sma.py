@@ -71,7 +71,8 @@ async def trading_setup():
         balances=[
             Balance(asset="USD", free=10000.0, locked=0.0),
             Balance(asset="BTC", free=1.0, locked=0.0)
-        ]
+        ],
+        raw_data={}  # Add the missing raw_data parameter
     )
     execution_service.get_account_info.return_value = account
     
@@ -311,7 +312,8 @@ async def test_account_update_notification(trading_setup):
         balances=[
             Balance(asset="USD", free=9500.0, locked=500.0),
             Balance(asset="BTC", free=1.1, locked=0.0)
-        ]
+        ],
+        raw_data={}  # Add the missing raw_data parameter
     )
     
     # Notify the strategy of the account update
