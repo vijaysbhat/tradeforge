@@ -126,6 +126,7 @@ async def trading_setup():
     
     # Clean up logging handlers to prevent "I/O operation on closed file" errors
     root_logger = logging.getLogger()
+    print("Logger", root_logger)
     for handler in root_logger.handlers[:]:
         handler.close()
         root_logger.removeHandler(handler)
