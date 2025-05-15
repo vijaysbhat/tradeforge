@@ -307,6 +307,8 @@ class TradingEngine:
     async def _main_loop(self) -> None:
         """Main engine loop that updates strategies periodically."""
         self.last_timer_time = time.time()
+        self.last_broker_update_time = time.time()
+        broker_update_interval = 5.0  # Update broker data every 5 seconds to avoid rate limits
         
         while self.running:
             try:
@@ -316,9 +318,13 @@ class TradingEngine:
                     self.last_timer_time = current_time
                     await self._update_strategies_timer()
                 
-                # Update account and position data periodically
-                for broker_name in self.active_brokers:
-                    asyncio.create_task(self._update_broker_data(broker_name))
+                # Update account and position data periodically with rate limiting
+                if current_time - self.last_broker_update_time >= broker_update_interval:
+                    self.last_broker_update_time = current_time
+                    for broker_name in self.active_brokers:
+                        await self._update_broker_data(broker_name)
+                        # Add delay between broker updates to avoid rate limits
+                        await asyncio.sleep(1.0)
                 
                 # Sleep to avoid high CPU usage
                 await asyncio.sleep(0.1)

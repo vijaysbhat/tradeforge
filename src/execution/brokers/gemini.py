@@ -11,6 +11,10 @@ from typing import Dict, List, Any, Optional
 from ..base import Broker, OrderType, OrderSide, OrderStatus
 from ..models import Balance, Account, Position, Order, Trade
 
+# Rate limiting constants
+RATE_LIMIT_REQUESTS = 10  # Maximum requests per time window
+RATE_LIMIT_WINDOW = 60.0  # Time window in seconds
+
 
 class GeminiBroker(Broker):
     """Gemini broker implementation."""
@@ -27,22 +31,56 @@ class GeminiBroker(Broker):
             self.base_url = "https://api.gemini.com"
             
         self.session = None
+        
+        # Rate limiting
+        self.request_timestamps = []
+        self.rate_limit_lock = asyncio.Lock()
     
     async def _ensure_session(self):
         if self.session is None or self.session.closed:
             self.session = aiohttp.ClientSession()
     
     async def _make_public_request(self, endpoint: str, params: Dict = None) -> Dict[str, Any]:
+        # Apply rate limiting
+        await self._apply_rate_limit()
+        
         await self._ensure_session()
         url = f"{self.base_url}{endpoint}"
         
         async with self.session.get(url, params=params) as response:
             if response.status != 200:
                 error_text = await response.text()
+                # If we hit rate limit, wait and retry
+                if response.status == 429:
+                    retry_after = int(response.headers.get('Retry-After', '5'))
+                    await asyncio.sleep(retry_after)
+                    return await self._make_public_request(endpoint, params)
                 raise Exception(f"Gemini API error: {response.status} - {error_text}")
             return await response.json()
     
+    async def _apply_rate_limit(self):
+        """Apply rate limiting to avoid hitting API limits."""
+        async with self.rate_limit_lock:
+            current_time = time.time()
+            
+            # Remove timestamps older than the window
+            self.request_timestamps = [ts for ts in self.request_timestamps 
+                                      if current_time - ts < RATE_LIMIT_WINDOW]
+            
+            # If we've hit the rate limit, wait until we can make another request
+            if len(self.request_timestamps) >= RATE_LIMIT_REQUESTS:
+                oldest_timestamp = min(self.request_timestamps)
+                wait_time = RATE_LIMIT_WINDOW - (current_time - oldest_timestamp)
+                if wait_time > 0:
+                    await asyncio.sleep(wait_time)
+            
+            # Add current timestamp to the list
+            self.request_timestamps.append(time.time())
+    
     async def _make_private_request(self, endpoint: str, payload: Dict = None) -> Dict[str, Any]:
+        # Apply rate limiting
+        await self._apply_rate_limit()
+        
         await self._ensure_session()
         url = f"{self.base_url}{endpoint}"
         
@@ -78,6 +116,11 @@ class GeminiBroker(Broker):
                     # Check for nonce error and provide a more helpful message
                     if "Nonce" in response_text and "not within" in response_text:
                         raise Exception(f"Gemini API nonce error. Please check your system clock synchronization. Error: {response_text}")
+                    # If we hit rate limit, wait and retry
+                    if response.status == 429:
+                        retry_after = int(response.headers.get('Retry-After', '5'))
+                        await asyncio.sleep(retry_after)
+                        return await self._make_private_request(endpoint, payload)
                     raise Exception(f"Gemini API error: {response.status} - {response_text}")
                 
                 return json.loads(response_text)
