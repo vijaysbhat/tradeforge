@@ -196,7 +196,7 @@ class SimpleMovingAverageStrategy(Strategy):
                 # Add buy signal to chart
                 if self.enable_visualization and self.chart:
                     self.chart.add_signal(candles[-1].timestamp, current_price, OrderSide.BUY)
-                    self.chart.plot(save=True)
+                    # No need to call plot() as data is saved to files by add_signal()
             else:
                 self.logger.info(f"Already have position: {self.current_position}, not buying")
         
@@ -211,7 +211,7 @@ class SimpleMovingAverageStrategy(Strategy):
                 # Add sell signal to chart
                 if self.enable_visualization and self.chart:
                     self.chart.add_signal(candles[-1].timestamp, current_price, OrderSide.SELL)
-                    self.chart.plot(save=True)
+                    # No need to call plot() as data is saved to files by add_signal()
             else:
                 self.logger.info(f"No position to sell: {self.current_position}")
         else:
