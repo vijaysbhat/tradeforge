@@ -37,6 +37,25 @@ logger = logging.getLogger(__name__)
 
 def load_config(config_file: str = "config.json") -> Dict[str, Any]:
     """Load configuration from a JSON file."""
+    # Load environment variables from .env file if it exists
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        logger.info("Loaded environment variables from .env file")
+    except ImportError:
+        logger.warning("python-dotenv not installed, skipping .env file loading")
+    
+    # Log environment variables (masked for security)
+    gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+    gemini_api_secret = os.environ.get("GEMINI_API_SECRET", "")
+    gemini_sandbox_api_key = os.environ.get("GEMINI_SANDBOX_API_KEY", "")
+    gemini_sandbox_api_secret = os.environ.get("GEMINI_SANDBOX_API_SECRET", "")
+    
+    logger.info(f"GEMINI_API_KEY: {'*' * min(5, len(gemini_api_key))}{'*' * 5 if gemini_api_key else 'Not set'}")
+    logger.info(f"GEMINI_API_SECRET: {'*' * min(5, len(gemini_api_secret))}{'*' * 5 if gemini_api_secret else 'Not set'}")
+    logger.info(f"GEMINI_SANDBOX_API_KEY: {'*' * min(5, len(gemini_sandbox_api_key))}{'*' * 5 if gemini_sandbox_api_key else 'Not set'}")
+    logger.info(f"GEMINI_SANDBOX_API_SECRET: {'*' * min(5, len(gemini_sandbox_api_secret))}{'*' * 5 if gemini_sandbox_api_secret else 'Not set'}")
+    
     try:
         with open(config_file, 'r') as f:
             return json.load(f)
@@ -45,15 +64,19 @@ def load_config(config_file: str = "config.json") -> Dict[str, Any]:
         return {
             "data_providers": {
                 "gemini": {
-                    "api_key": os.environ.get("GEMINI_API_KEY", ""),
-                    "api_secret": os.environ.get("GEMINI_API_SECRET", ""),
+                    "api_key": gemini_api_key,
+                    "api_secret": gemini_api_secret,
+                    "sandbox_api_key": gemini_sandbox_api_key,
+                    "sandbox_api_secret": gemini_sandbox_api_secret,
                     "sandbox": True
                 }
             },
             "brokers": {
                 "gemini": {
-                    "api_key": os.environ.get("GEMINI_API_KEY", ""),
-                    "api_secret": os.environ.get("GEMINI_API_SECRET", ""),
+                    "api_key": gemini_api_key,
+                    "api_secret": gemini_api_secret,
+                    "sandbox_api_key": gemini_sandbox_api_key,
+                    "sandbox_api_secret": gemini_sandbox_api_secret,
                     "sandbox": True
                 }
             },
@@ -89,10 +112,27 @@ async def setup_services(config: Dict[str, Any]):
     # Register data providers
     for provider_name, provider_config in config.get("data_providers", {}).items():
         if provider_name == "gemini":
+            # Determine if we're using sandbox mode
+            sandbox_mode = provider_config.get("sandbox", use_sandbox)
+            
+            # Select the appropriate API keys based on sandbox mode
+            if sandbox_mode:
+                api_key = provider_config.get("sandbox_api_key", "")
+                api_secret = provider_config.get("sandbox_api_secret", "")
+                logger.info(f"Using sandbox API keys for {provider_name} data provider")
+            else:
+                api_key = provider_config.get("api_key", "")
+                api_secret = provider_config.get("api_secret", "")
+                logger.info(f"Using production API keys for {provider_name} data provider")
+            
+            # Log key information (masked)
+            logger.info(f"API Key length: {len(api_key)}")
+            logger.info(f"API Secret length: {len(api_secret)}")
+            
             provider = GeminiDataProvider(
-                api_key=provider_config.get("api_key", ""),
-                api_secret=provider_config.get("api_secret", ""),
-                sandbox=provider_config.get("sandbox", use_sandbox)
+                api_key=api_key,
+                api_secret=api_secret,
+                sandbox=sandbox_mode
             )
             data_service.register_provider(provider_name, provider)
             logger.info(f"Registered data provider: {provider_name} (sandbox: {provider.sandbox})")
@@ -100,10 +140,27 @@ async def setup_services(config: Dict[str, Any]):
     # Register brokers
     for broker_name, broker_config in config.get("brokers", {}).items():
         if broker_name == "gemini":
+            # Determine if we're using sandbox mode
+            sandbox_mode = broker_config.get("sandbox", use_sandbox)
+            
+            # Select the appropriate API keys based on sandbox mode
+            if sandbox_mode:
+                api_key = broker_config.get("sandbox_api_key", "")
+                api_secret = broker_config.get("sandbox_api_secret", "")
+                logger.info(f"Using sandbox API keys for {broker_name} broker")
+            else:
+                api_key = broker_config.get("api_key", "")
+                api_secret = broker_config.get("api_secret", "")
+                logger.info(f"Using production API keys for {broker_name} broker")
+            
+            # Log key information (masked)
+            logger.info(f"API Key length: {len(api_key)}")
+            logger.info(f"API Secret length: {len(api_secret)}")
+            
             broker = GeminiBroker(
-                api_key=broker_config.get("api_key", ""),
-                api_secret=broker_config.get("api_secret", ""),
-                sandbox=broker_config.get("sandbox", use_sandbox)
+                api_key=api_key,
+                api_secret=api_secret,
+                sandbox=sandbox_mode
             )
             execution_service.register_broker(broker_name, broker)
             logger.info(f"Registered broker: {broker_name} (sandbox: {broker.sandbox})")
