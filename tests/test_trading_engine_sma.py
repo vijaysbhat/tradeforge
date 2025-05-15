@@ -119,15 +119,28 @@ async def test_sma_buy_signal_generation(trading_setup):
     candles = []
     base_time = datetime.datetime.now() - datetime.timedelta(hours=15)
     
-    # Create candles with decreasing prices (short MA below long MA)
-    for i in range(15):
+    # Create initial candles with higher prices for long MA
+    for i in range(10):  # Long period is 10
         candle = Candle(
             symbol="btcusd",
             timestamp=base_time + datetime.timedelta(hours=i),
             open=10000.0,
             high=10100.0,
             low=9900.0,
-            close=10000.0 - (i * 10),  # Decreasing price
+            close=10200.0,  # Higher price for long MA
+            volume=10.0
+        )
+        candles.append(candle)
+    
+    # Then create candles with lower prices for recent short MA
+    for i in range(5):  # Short period is 5
+        candle = Candle(
+            symbol="btcusd",
+            timestamp=base_time + datetime.timedelta(hours=10+i),
+            open=10000.0,
+            high=10050.0,
+            low=9900.0,
+            close=9800.0,  # Lower price for short MA
             volume=10.0
         )
         candles.append(candle)
@@ -139,16 +152,16 @@ async def test_sma_buy_signal_generation(trading_setup):
     # Reset the mock to track new calls
     trading_engine._execute_signal.reset_mock()
     
-    # Now create candles with increasing prices to trigger a buy signal
-    # The last 5 candles (short period) will have higher prices to make short MA cross above long MA
+    # Now create candles with rapidly increasing prices to trigger a buy signal
+    # These prices will make the short MA cross above the long MA
     for i in range(5):
         candle = Candle(
             symbol="btcusd",
             timestamp=base_time + datetime.timedelta(hours=15+i),
-            open=9850.0,
-            high=10200.0,
+            open=9900.0,
+            high=10500.0,
             low=9800.0,
-            close=9850.0 + (i * 50),  # Increasing price
+            close=10000.0 + (i * 200),  # Rapidly increasing price
             volume=15.0
         )
         strategy.on_candle(candle, "btcusd", "1h", "gemini")
@@ -182,15 +195,28 @@ async def test_sma_sell_signal_generation(trading_setup):
     candles = []
     base_time = datetime.datetime.now() - datetime.timedelta(hours=15)
     
-    # Create candles with increasing prices (short MA above long MA)
-    for i in range(15):
+    # Create initial candles with lower prices for long MA
+    for i in range(10):  # Long period is 10
         candle = Candle(
             symbol="btcusd",
             timestamp=base_time + datetime.timedelta(hours=i),
             open=10000.0,
             high=10100.0,
             low=9900.0,
-            close=10000.0 + (i * 10),  # Increasing price
+            close=9800.0,  # Lower price for long MA
+            volume=10.0
+        )
+        candles.append(candle)
+    
+    # Then create candles with higher prices for recent short MA
+    for i in range(5):  # Short period is 5
+        candle = Candle(
+            symbol="btcusd",
+            timestamp=base_time + datetime.timedelta(hours=10+i),
+            open=10000.0,
+            high=10200.0,
+            low=9900.0,
+            close=10500.0,  # Higher price for short MA
             volume=10.0
         )
         candles.append(candle)
@@ -202,16 +228,16 @@ async def test_sma_sell_signal_generation(trading_setup):
     # Reset the mock to track new calls
     trading_engine._execute_signal.reset_mock()
     
-    # Now create candles with decreasing prices to trigger a sell signal
-    # The last 5 candles (short period) will have lower prices to make short MA cross below long MA
+    # Now create candles with rapidly decreasing prices to trigger a sell signal
+    # These prices will make the short MA cross below the long MA
     for i in range(5):
         candle = Candle(
             symbol="btcusd",
             timestamp=base_time + datetime.timedelta(hours=15+i),
-            open=10150.0,
-            high=10200.0,
-            low=10000.0,
-            close=10150.0 - (i * 50),  # Decreasing price
+            open=10400.0,
+            high=10500.0,
+            low=9500.0,
+            close=10400.0 - (i * 200),  # Rapidly decreasing price
             volume=15.0
         )
         strategy.on_candle(candle, "btcusd", "1h", "gemini")
@@ -245,9 +271,11 @@ async def test_trading_engine_processes_signal(trading_setup):
         order_type=OrderType.MARKET,
         quantity=0.1,
         broker="gemini",
-        strategy_id="SimpleMovingAverageStrategy",
-        metadata={"reason": "TEST_SIGNAL"}
+        strategy_id="SimpleMovingAverageStrategy"
     )
+    
+    # Add metadata after creation
+    signal.metadata = {"reason": "TEST_SIGNAL"}
     
     # Process the signal
     trading_engine._process_signal(signal)

@@ -190,13 +190,15 @@ class SimpleMovingAverageStrategy(Strategy):
             order_type=OrderType.MARKET,
             quantity=quantity,
             broker=self.broker,
-            strategy_id="SimpleMovingAverageStrategy",
-            metadata={
-                "reason": "MA_CROSSOVER_BUY",
-                "short_ma_period": self.short_period,
-                "long_ma_period": self.long_period
-            }
+            strategy_id="SimpleMovingAverageStrategy"
         )
+        
+        # Add metadata after creation
+        signal.metadata = {
+            "reason": "MA_CROSSOVER_BUY",
+            "short_ma_period": self.short_period,
+            "long_ma_period": self.long_period
+        }
         
         self.logger.info(f"Generated BUY signal for {self.symbol} at {price}")
         
@@ -221,13 +223,15 @@ class SimpleMovingAverageStrategy(Strategy):
             order_type=OrderType.MARKET,
             quantity=self.current_position,
             broker=self.broker,
-            strategy_id="SimpleMovingAverageStrategy",
-            metadata={
-                "reason": "MA_CROSSOVER_SELL",
-                "short_ma_period": self.short_period,
-                "long_ma_period": self.long_period
-            }
+            strategy_id="SimpleMovingAverageStrategy"
         )
+        
+        # Add metadata after creation
+        signal.metadata = {
+            "reason": "MA_CROSSOVER_SELL",
+            "short_ma_period": self.short_period,
+            "long_ma_period": self.long_period
+        }
         
         self.logger.info(f"Generated SELL signal for {self.symbol} at {price}")
         
