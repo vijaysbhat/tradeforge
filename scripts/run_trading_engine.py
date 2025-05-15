@@ -19,26 +19,14 @@ from src.engine.trading_engine import TradingEngine
 from src.strategy.base import StrategySignal
 
 
-# Load configuration first to get logging settings
-config = load_config()
-logging_config = config.get("logging", {})
-
-# Configure logging
-logging_level = getattr(logging, logging_config.get("level", "INFO"))
+# Basic logger configuration to start with
 logging.basicConfig(
-    level=logging_level,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(logging_config.get("file", "trading_engine.log"))
+        logging.StreamHandler()
     ]
 )
-
-# Set specific loggers based on configuration
-for module, level in logging_config.get("modules", {}).items():
-    logging.getLogger(module).setLevel(getattr(logging, level))
-
-logger.info(f"Logging configured at {logging_level} level")
 
 logger = logging.getLogger(__name__)
 
