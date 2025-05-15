@@ -86,6 +86,11 @@ class TradingEngine:
         Args:
             signal: Trading signal to execute
         """
+        # Name this task for easier identification
+        current_task = asyncio.current_task()
+        if current_task:
+            current_task.set_name(f"TradingEngine_execute_signal_{signal.symbol}")
+            
         try:
             # Place the order
             order_result = await self.execution_service.place_order(
@@ -165,14 +170,29 @@ class TradingEngine:
         if hasattr(self, 'main_loop_task') and not self.main_loop_task.done():
             try:
                 # Give the task a short time to complete gracefully
-                await asyncio.wait_for(self.main_loop_task, timeout=1.0)
+                await asyncio.wait_for(self.main_loop_task, timeout=0.5)
             except asyncio.TimeoutError:
                 # Cancel the task if it doesn't complete in time
                 self.main_loop_task.cancel()
                 try:
                     await self.main_loop_task
                 except asyncio.CancelledError:
-                    pass
+                    self.logger.debug("Main loop task cancelled")
+                except Exception as e:
+                    self.logger.debug(f"Error during main loop task cancellation: {e}")
+        
+        # Cancel any other pending tasks created by this engine
+        tasks = [t for t in asyncio.all_tasks() 
+                if t is not asyncio.current_task() and 
+                t.get_name().startswith('TradingEngine_')]
+        
+        if tasks:
+            self.logger.debug(f"Cancelling {len(tasks)} remaining engine tasks")
+            for task in tasks:
+                task.cancel()
+            
+            # Wait for all tasks to be cancelled
+            await asyncio.gather(*tasks, return_exceptions=True)
         
         self.logger.info("Trading engine stopped")
     
@@ -390,6 +410,11 @@ class TradingEngine:
     
     async def _main_loop(self) -> None:
         """Main engine loop that updates strategies periodically."""
+        # Name this task for easier identification
+        current_task = asyncio.current_task()
+        if current_task:
+            current_task.set_name(f"TradingEngine_main_loop")
+        
         self.last_timer_time = time.time()
         self.last_broker_update_time = time.time()
         broker_update_interval = 5.0  # Update broker data every 5 seconds to avoid rate limits
@@ -412,7 +437,14 @@ class TradingEngine:
                 
                 # Sleep to avoid high CPU usage
                 await asyncio.sleep(0.1)
+                
+                # Check if we should exit
+                if not self.running:
+                    break
             
+            except asyncio.CancelledError:
+                self.logger.debug("Main loop task cancelled")
+                break
             except Exception as e:
                 self.logger.error(f"Error in main loop: {str(e)}")
                 await asyncio.sleep(1)  # Sleep longer on error

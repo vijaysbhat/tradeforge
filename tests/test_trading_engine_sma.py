@@ -113,6 +113,16 @@ async def trading_setup():
     
     # Allow a short time for any remaining tasks to clean up
     await asyncio.sleep(0.1)
+    
+    # Cancel any remaining tasks that might be related to this test
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task() and not task.done():
+            task.cancel()
+            try:
+                # Give a very short timeout to avoid hanging
+                await asyncio.wait_for(task, timeout=0.1)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                pass
 
 
 @pytest.mark.asyncio
