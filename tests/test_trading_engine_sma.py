@@ -5,6 +5,7 @@ import pytest
 import logging
 import traceback
 import sys
+import warnings
 
 from src.data.models import Candle, Ticker, OrderBook, Trade
 from src.data.service import DataService
@@ -16,28 +17,15 @@ from src.strategy.base import StrategySignal
 from src.strategy.service import StrategyService
 from strategies.simple_moving_average import SimpleMovingAverageStrategy
 
-def log_pending_task_destruction(task):
-    if not task.done() and not task.cancelled():
-        task_info = {
-            'task_name': task.get_name(),
-            'task_id': id(task),
-            'coro': str(task.get_coro()),
-            'frame': None
-        }
+# Configure asyncio to show more detailed warnings about pending tasks
+warnings.filterwarnings(
+    "always",
+    message=r"coroutine '.*' was never awaited",
+    category=RuntimeWarning
+)
 
-        # Try to get the current frame of the coroutine
-        try:
-            frame = sys._current_frames().get(task._loop._thread_id)
-            if frame:
-                task_info['frame'] = ''.join(traceback.format_stack(frame))
-        except Exception as e:
-            task_info['frame_error'] = str(e)
-
-        # Log the task information
-        logging.error(f"Task was destroyed but it is pending! Details: {task_info}")
-
-# Install the finalizer
-asyncio.Task.set_destroy_hook(log_pending_task_destruction)
+# Enable asyncio debug mode to get more detailed task information
+asyncio.get_event_loop().set_debug(True)
 
 
 @pytest.fixture
