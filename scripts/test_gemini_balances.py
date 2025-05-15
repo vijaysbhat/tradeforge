@@ -8,10 +8,11 @@ import asyncio
 import os
 import sys
 import logging
+import dotenv
 from pprint import pprint
 
-# Add the project root to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+# Add the src directory to the Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.execution.brokers.gemini import GeminiBroker
 
@@ -51,19 +52,26 @@ async def test_get_account_info(broker):
 
 async def main():
     """Main function to run the tests."""
-    # Get API credentials from environment variables
-    api_key = os.environ.get("GEMINI_API_KEY")
-    api_secret = os.environ.get("GEMINI_API_SECRET")
-    sandbox = os.environ.get("GEMINI_SANDBOX", "true").lower() == "true"
+        # Load environment variables from .env file
+    dotenv.load_dotenv()
+
+    use_sandbox = os.environ.get("GEMINI_SANDBOX", "true").lower() == "true"
+        # Get API credentials from args or environment variables
+    if use_sandbox:
+        api_key = os.environ.get("GEMINI_SANDBOX_API_KEY")
+        api_secret = os.environ.get("GEMINI_SANDBOX_API_SECRET")
+    else:
+        api_key = os.environ.get("GEMINI_API_KEY")
+        api_secret = os.environ.get("GEMINI_API_SECRET")
     
     if not api_key or not api_secret:
         logger.error("Missing API credentials. Please set GEMINI_API_KEY and GEMINI_API_SECRET environment variables.")
-        if sandbox:
+        if use_sandbox:
             logger.error("For sandbox testing, set GEMINI_SANDBOX_API_KEY and GEMINI_SANDBOX_API_SECRET.")
         return
     
-    logger.info(f"Initializing Gemini broker (sandbox={sandbox})...")
-    broker = GeminiBroker(api_key, api_secret, sandbox)
+    logger.info(f"Initializing Gemini broker (sandbox={use_sandbox})...")
+    broker = GeminiBroker(api_key, api_secret, use_sandbox)
     
     try:
         # Test account info (balances)
