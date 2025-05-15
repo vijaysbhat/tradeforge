@@ -262,30 +262,50 @@ async def main():
     # Load configuration
     config = load_config()
     
-    # Set up services and trading engine
-    trading_engine = await setup_services(config)
+    # Create a shutdown event
+    shutdown_event = asyncio.Event()
     
     # Set up signal handlers for graceful shutdown
     loop = asyncio.get_running_loop()
     
     def handle_shutdown(sig, frame):
-        logger.info(f"Received signal {sig}, shutting down...")
-        loop.create_task(shutdown(trading_engine))
+        logger.info(f"Received signal {sig}, initiating shutdown...")
+        loop.create_task(initiate_shutdown(trading_engine, shutdown_event))
+    
+    # Helper function to initiate shutdown
+    async def initiate_shutdown(engine, event):
+        shutdown_complete = await shutdown(engine)
+        if shutdown_complete:
+            event.set()
     
     # Register signal handlers
     signal.signal(signal.SIGINT, handle_shutdown)
     signal.signal(signal.SIGTERM, handle_shutdown)
     
-    # Keep the program running
-    while True:
-        await asyncio.sleep(1)
+    # Set up services and trading engine
+    trading_engine = await setup_services(config)
+    
+    # Keep the program running until shutdown event is set
+    try:
+        while not shutdown_event.is_set():
+            await asyncio.sleep(1)
+        logger.info("Clean shutdown completed")
+    except asyncio.CancelledError:
+        logger.info("Main task cancelled")
+        if not shutdown_event.is_set():
+            await shutdown(trading_engine)
 
 
 async def shutdown(trading_engine):
     """Gracefully shut down the trading engine."""
-    await trading_engine.stop()
-    # Exit the program
-    sys.exit(0)
+    logger.info("Shutting down...")
+    
+    if trading_engine:
+        await trading_engine.stop()
+    
+    # Instead of sys.exit(), set a flag to indicate shutdown
+    # The main function will check this flag and exit properly
+    return True  # Return True to indicate shutdown is complete
 
 
 if __name__ == "__main__":
