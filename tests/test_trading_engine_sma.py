@@ -355,7 +355,7 @@ async def test_order_update_notification(trading_setup):
         filled_quantity=0.1,
         average_price=10050.0,
         time_in_force="GTC",
-        metadata={"strategy_id": "SimpleMovingAverageStrategy"}
+        raw_data={"strategy_id": "SimpleMovingAverageStrategy"}  # Changed metadata to raw_data
     )
     
     # Notify the strategy of the order update
