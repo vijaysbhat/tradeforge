@@ -57,14 +57,70 @@ class TradingChart:
         if not os.path.exists(self.candles_file):
             with open(self.candles_file, 'w') as f:
                 json.dump([], f)
+        else:
+            # Load existing candles
+            try:
+                with open(self.candles_file, 'r') as f:
+                    candles_data = json.load(f)
+                    
+                # Convert loaded candles to Candle objects
+                for candle_data in candles_data:
+                    try:
+                        timestamp = datetime.fromisoformat(candle_data["timestamp"])
+                        candle = Candle(
+                            symbol=self.symbol,
+                            timestamp=timestamp,
+                            open=candle_data["open"],
+                            high=candle_data["high"],
+                            low=candle_data["low"],
+                            close=candle_data["close"],
+                            volume=candle_data["volume"]
+                        )
+                        self.candles.append(candle)
+                    except Exception as e:
+                        logger.error(f"Error parsing candle data: {e}")
+                
+                logger.info(f"Loaded {len(self.candles)} existing candles")
+            except Exception as e:
+                logger.error(f"Error loading candles file: {e}")
         
         if not os.path.exists(self.indicators_file):
             with open(self.indicators_file, 'w') as f:
                 json.dump({"short_ma": [], "long_ma": []}, f)
+        else:
+            # Load existing indicators
+            try:
+                with open(self.indicators_file, 'r') as f:
+                    indicators_data = json.load(f)
+                
+                # Convert loaded indicators to the right format
+                if "short_ma" in indicators_data:
+                    self.short_ma_values = [(datetime.fromisoformat(t), v) for t, v in indicators_data["short_ma"]]
+                if "long_ma" in indicators_data:
+                    self.long_ma_values = [(datetime.fromisoformat(t), v) for t, v in indicators_data["long_ma"]]
+                
+                logger.info(f"Loaded {len(self.short_ma_values)} short MA and {len(self.long_ma_values)} long MA values")
+            except Exception as e:
+                logger.error(f"Error loading indicators file: {e}")
         
         if not os.path.exists(self.signals_file):
             with open(self.signals_file, 'w') as f:
                 json.dump({"buy": [], "sell": []}, f)
+        else:
+            # Load existing signals
+            try:
+                with open(self.signals_file, 'r') as f:
+                    signals_data = json.load(f)
+                
+                # Convert loaded signals to the right format
+                if "buy" in signals_data:
+                    self.buy_signals = [(datetime.fromisoformat(t), p) for t, p in signals_data["buy"]]
+                if "sell" in signals_data:
+                    self.sell_signals = [(datetime.fromisoformat(t), p) for t, p in signals_data["sell"]]
+                
+                logger.info(f"Loaded {len(self.buy_signals)} buy signals and {len(self.sell_signals)} sell signals")
+            except Exception as e:
+                logger.error(f"Error loading signals file: {e}")
     
     def add_candle(self, candle: Candle) -> None:
         """
@@ -113,21 +169,45 @@ class TradingChart:
     
     def _save_candles(self):
         """Save candles data to file."""
-        candles_data = []
-        for candle in self.candles:
-            candles_data.append({
-                "timestamp": candle.timestamp.isoformat(),
-                "open": candle.open,
-                "high": candle.high,
-                "low": candle.low,
-                "close": candle.close,
-                "volume": candle.volume
-            })
+        # First load existing candles
+        existing_candles = []
+        try:
+            if os.path.exists(self.candles_file):
+                with open(self.candles_file, 'r') as f:
+                    existing_candles = json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading existing candles: {e}")
+            existing_candles = []
+        
+        # Convert the latest candle to a dict
+        if self.candles:
+            latest_candle = self.candles[-1]
+            candle_data = {
+                "timestamp": latest_candle.timestamp.isoformat(),
+                "open": latest_candle.open,
+                "high": latest_candle.high,
+                "low": latest_candle.low,
+                "close": latest_candle.close,
+                "volume": latest_candle.volume
+            }
+            
+            # Check if this candle already exists (by timestamp)
+            timestamp_exists = False
+            for i, existing_candle in enumerate(existing_candles):
+                if existing_candle["timestamp"] == candle_data["timestamp"]:
+                    # Update the existing candle
+                    existing_candles[i] = candle_data
+                    timestamp_exists = True
+                    break
+            
+            # If it's a new timestamp, append it
+            if not timestamp_exists:
+                existing_candles.append(candle_data)
         
         try:
             with open(self.candles_file, 'w') as f:
-                json.dump(candles_data, f)
-            logger.debug(f"Saved {len(candles_data)} candles to {self.candles_file}")
+                json.dump(existing_candles, f)
+            logger.debug(f"Saved {len(existing_candles)} candles to {self.candles_file}")
         except Exception as e:
             logger.error(f"Error saving candles data: {e}")
     
