@@ -1,23 +1,7 @@
 {
-  "data_providers": {
-    "gemini": {
-      "api_key": "",
-      "api_secret": "",
-      "sandbox_api_key": "",
-      "sandbox_api_secret": "",
-      "sandbox": true
-    }
-  },
-  "brokers": {
-    "gemini": {
-      "api_key": "",
-      "api_secret": "",
-      "sandbox_api_key": "",
-      "sandbox_api_secret": "",
-      "sandbox": true
-    }
-  },
   "use_sandbox": true,
+  "providers": ["gemini"],
+  "brokers": ["gemini"],
   "logging": {
     "level": "DEBUG",
     "file": "trading_engine.log",
