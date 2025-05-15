@@ -109,8 +109,9 @@ async def trading_setup():
 @pytest.mark.asyncio
 async def test_sma_buy_signal_generation(trading_setup):
     """Test that the SMA strategy generates a buy signal when short MA crosses above long MA."""
-    trading_engine = trading_setup["trading_engine"]
-    strategy = trading_setup["strategy"]
+    setup = trading_setup  # Get the setup data directly
+    trading_engine = setup["trading_engine"]
+    strategy = setup["strategy"]
     
     # Generate historical candles where short MA is below long MA
     candles = []
@@ -168,8 +169,9 @@ async def test_sma_buy_signal_generation(trading_setup):
 @pytest.mark.asyncio
 async def test_sma_sell_signal_generation(trading_setup):
     """Test that the SMA strategy generates a sell signal when short MA crosses below long MA."""
-    trading_engine = trading_setup["trading_engine"]
-    strategy = trading_setup["strategy"]
+    setup = trading_setup  # Get the setup data directly
+    trading_engine = setup["trading_engine"]
+    strategy = setup["strategy"]
     
     # First, set up a position
     strategy.current_position = 0.5  # Set position in strategy
@@ -231,7 +233,8 @@ async def test_sma_sell_signal_generation(trading_setup):
 @pytest.mark.asyncio
 async def test_trading_engine_processes_signal(trading_setup):
     """Test that the trading engine correctly processes a strategy signal."""
-    trading_engine = trading_setup["trading_engine"]
+    setup = trading_setup  # Get the setup data directly
+    trading_engine = setup["trading_engine"]
     
     # Create a signal
     signal = StrategySignal(
@@ -264,8 +267,9 @@ async def test_trading_engine_processes_signal(trading_setup):
 @pytest.mark.asyncio
 async def test_position_update_notification(trading_setup):
     """Test that position updates are correctly processed by the strategy."""
-    trading_engine = trading_setup["trading_engine"]
-    strategy = trading_setup["strategy"]
+    setup = trading_setup  # Get the setup data directly
+    trading_engine = setup["trading_engine"]
+    strategy = setup["strategy"]
     
     # Mock the strategy's on_position_update method
     original_on_position_update = strategy.on_position_update
@@ -293,8 +297,9 @@ async def test_position_update_notification(trading_setup):
 @pytest.mark.asyncio
 async def test_account_update_notification(trading_setup):
     """Test that account updates are correctly processed by the strategy."""
-    trading_engine = trading_setup["trading_engine"]
-    strategy = trading_setup["strategy"]
+    setup = trading_setup  # Get the setup data directly
+    trading_engine = setup["trading_engine"]
+    strategy = setup["strategy"]
     
     # Mock the strategy's on_account_update method
     original_on_account_update = strategy.on_account_update
@@ -322,8 +327,9 @@ async def test_account_update_notification(trading_setup):
 @pytest.mark.asyncio
 async def test_order_update_notification(trading_setup):
     """Test that order updates are correctly processed by the strategy."""
-    trading_engine = trading_setup["trading_engine"]
-    strategy = trading_setup["strategy"]
+    setup = trading_setup  # Get the setup data directly
+    trading_engine = setup["trading_engine"]
+    strategy = setup["strategy"]
     
     # Mock the strategy's on_order_update method
     original_on_order_update = strategy.on_order_update
