@@ -29,8 +29,8 @@ class SimpleMovingAverageStrategy(Strategy):
         
         # State variables
         self.candles: Dict[str, List[Candle]] = {}  # interval -> candles
-        self.current_position = 0
-        self.account_balance = 0
+        self.current_position = 0.0  # Initialize as float to avoid type issues
+        self.account_balance = 0.0
         self.last_signal_time = None
         self.signal_cooldown = datetime.timedelta(hours=1)
         
@@ -166,7 +166,8 @@ class SimpleMovingAverageStrategy(Strategy):
         # Buy signal: short MA crosses above long MA
         if prev_short_ma <= prev_long_ma and short_ma > long_ma:
             self.logger.info(f"BUY SIGNAL DETECTED: short MA ({short_ma:.2f}) crossed above long MA ({long_ma:.2f})")
-            if self.current_position <= 0:
+            # Check if we have a position, with proper float comparison to avoid precision issues
+            if self.current_position is None or self.current_position < 0.000001:
                 self._generate_buy_signal(candles[-1].close)
                 self.last_signal_time = current_time
             else:
@@ -175,7 +176,8 @@ class SimpleMovingAverageStrategy(Strategy):
         # Sell signal: short MA crosses below long MA
         elif prev_short_ma >= prev_long_ma and short_ma < long_ma:
             self.logger.info(f"SELL SIGNAL DETECTED: short MA ({short_ma:.2f}) crossed below long MA ({long_ma:.2f})")
-            if self.current_position > 0:
+            # Check if we have a position to sell, with proper float comparison
+            if self.current_position is not None and self.current_position > 0.000001:
                 self._generate_sell_signal(candles[-1].close)
                 self.last_signal_time = current_time
             else:
@@ -190,7 +192,8 @@ class SimpleMovingAverageStrategy(Strategy):
         Args:
             price: Current price
         """
-        if self.account_balance <= 0:
+        if self.account_balance is None or self.account_balance <= 0:
+            self.logger.warning("Cannot generate buy signal: No account balance available")
             return
         
         # Calculate quantity based on position size
@@ -226,7 +229,8 @@ class SimpleMovingAverageStrategy(Strategy):
         Args:
             price: Current price
         """
-        if self.current_position <= 0:
+        if self.current_position is None or self.current_position <= 0:
+            self.logger.warning("Cannot generate sell signal: No position to sell")
             return
         
         # Create signal
