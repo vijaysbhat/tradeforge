@@ -108,22 +108,27 @@ async def trading_setup():
         "strategy_service": strategy_service
     }
     
-    print("HELOOO!!!")
     # Stop the trading engine and ensure all tasks are cleaned up
     await trading_engine.stop()
     
     # Allow a short time for any remaining tasks to clean up
     await asyncio.sleep(0.1)
     
-    # Cancel any remaining tasks that might be related to this test
-    for task in asyncio.all_tasks():
-        if task is not asyncio.current_task() and not task.done():
-            task.cancel()
-            try:
-                # Give a very short timeout to avoid hanging
-                await asyncio.wait_for(task, timeout=0.1)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
-                pass
+    # Get all pending tasks
+    pending_tasks = [t for t in asyncio.all_tasks() 
+                    if t is not asyncio.current_task() and not t.done()]
+    
+    # Cancel all pending tasks
+    for task in pending_tasks:
+        task.cancel()
+    
+    # Wait for all tasks to complete with a timeout
+    if pending_tasks:
+        try:
+            # Wait for all tasks to be cancelled
+            await asyncio.wait(pending_tasks, timeout=0.5)
+        except Exception as e:
+            logging.debug(f"Error waiting for tasks to cancel: {e}")
     
     # Clean up logging handlers to prevent "I/O operation on closed file" errors
     root_logger = logging.getLogger()
@@ -131,21 +136,16 @@ async def trading_setup():
         handler.close()
         root_logger.removeHandler(handler)
     
-    # Make sure all tasks are properly cleaned up
-    remaining_tasks = [t for t in asyncio.all_tasks() 
-                      if t is not asyncio.current_task() and not t.done()]
+    # Check one more time for any remaining tasks and force cancel them
+    final_tasks = [t for t in asyncio.all_tasks() 
+                  if t is not asyncio.current_task() and not t.done()]
     
-    if remaining_tasks:
-        # Log information about remaining tasks for debugging
-        for task in remaining_tasks:
-            task_name = task.get_name()
-            task_coro = task.get_coro().__qualname__ if hasattr(task.get_coro(), '__qualname__') else str(task.get_coro())
-            logging.debug(f"Cancelling remaining task: {task_name} - {task_coro}")
+    if final_tasks:
+        # Force cancel any remaining tasks
+        for task in final_tasks:
             task.cancel()
-        
-        # Wait for all tasks to be cancelled with a timeout
-        if remaining_tasks:
-            await asyncio.wait(remaining_tasks, timeout=0.5)
+            
+        # Don't wait for them to complete, just let them be garbage collected
 
 
 @pytest.mark.asyncio

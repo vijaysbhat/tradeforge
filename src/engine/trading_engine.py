@@ -175,13 +175,14 @@ class TradingEngine:
         if hasattr(self, 'main_loop_task') and not self.main_loop_task.done():
             try:
                 # Give the task a short time to complete gracefully
-                await asyncio.wait_for(self.main_loop_task, timeout=0.5)
+                await asyncio.wait_for(self.main_loop_task, timeout=0.2)
             except asyncio.TimeoutError:
                 # Cancel the task if it doesn't complete in time
                 self.main_loop_task.cancel()
                 try:
-                    await self.main_loop_task
-                except asyncio.CancelledError:
+                    # Wait with a very short timeout
+                    await asyncio.wait_for(asyncio.shield(self.main_loop_task), timeout=0.1)
+                except (asyncio.TimeoutError, asyncio.CancelledError):
                     self.logger.debug("Main loop task cancelled")
                 except Exception as e:
                     self.logger.debug(f"Error during main loop task cancellation: {e}")
@@ -197,11 +198,14 @@ class TradingEngine:
             for task in tasks:
                 task.cancel()
             
-            # Wait for all tasks to be cancelled with a timeout
-            try:
-                await asyncio.wait(tasks, timeout=1.0)
-            except Exception as e:
-                self.logger.debug(f"Error waiting for tasks to cancel: {e}")
+            # Wait for all tasks to be cancelled with a short timeout
+            if tasks:
+                try:
+                    done, pending = await asyncio.wait(tasks, timeout=0.2)
+                    if pending:
+                        self.logger.debug(f"Some tasks still pending after timeout: {len(pending)}")
+                except Exception as e:
+                    self.logger.debug(f"Error waiting for tasks to cancel: {e}")
         
         self.logger.info("Trading engine stopped")
     
@@ -428,35 +432,42 @@ class TradingEngine:
         self.last_broker_update_time = time.time()
         broker_update_interval = 5.0  # Update broker data every 5 seconds to avoid rate limits
         
-        while self.running:
-            try:
-                # Check if it's time for a timer update
-                current_time = time.time()
-                if current_time - self.last_timer_time >= self.timer_interval:
-                    self.last_timer_time = current_time
-                    await self._update_strategies_timer()
+        try:
+            while self.running:
+                try:
+                    # Check if it's time for a timer update
+                    current_time = time.time()
+                    if current_time - self.last_timer_time >= self.timer_interval:
+                        self.last_timer_time = current_time
+                        await self._update_strategies_timer()
+                    
+                    # Update account and position data periodically with rate limiting
+                    if current_time - self.last_broker_update_time >= broker_update_interval:
+                        self.last_broker_update_time = current_time
+                        for broker_name in self.active_brokers:
+                            if not self.running:
+                                break
+                            await self._update_broker_data(broker_name)
+                            # Add delay between broker updates to avoid rate limits
+                            await asyncio.sleep(0.1)  # Reduced delay for tests
+                    
+                    # Sleep to avoid high CPU usage
+                    await asyncio.sleep(0.1)
+                    
+                    # Check if we should exit
+                    if not self.running:
+                        break
                 
-                # Update account and position data periodically with rate limiting
-                if current_time - self.last_broker_update_time >= broker_update_interval:
-                    self.last_broker_update_time = current_time
-                    for broker_name in self.active_brokers:
-                        await self._update_broker_data(broker_name)
-                        # Add delay between broker updates to avoid rate limits
-                        await asyncio.sleep(1.0)
-                
-                # Sleep to avoid high CPU usage
-                await asyncio.sleep(0.1)
-                
-                # Check if we should exit
-                if not self.running:
+                except asyncio.CancelledError:
+                    self.logger.debug("Main loop task cancelled")
                     break
-            
-            except asyncio.CancelledError:
-                self.logger.debug("Main loop task cancelled")
-                break
-            except Exception as e:
-                self.logger.error(f"Error in main loop: {str(e)}")
-                await asyncio.sleep(1)  # Sleep longer on error
+                except Exception as e:
+                    self.logger.error(f"Error in main loop: {str(e)}")
+                    if not self.running:
+                        break
+                    await asyncio.sleep(0.5)  # Reduced sleep time on error for tests
+        finally:
+            self.logger.debug("Main loop exiting")
     
     async def _update_broker_data(self, broker_name: str) -> None:
         """
