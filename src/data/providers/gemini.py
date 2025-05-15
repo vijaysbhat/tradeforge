@@ -92,7 +92,7 @@ class GeminiDataProvider(MarketDataProvider):
         
         return trades
     
-    async def get_candles(self, symbol: str, interval: str, 
+    async def get_candles(self, symbol: str, interval: str = "1m", 
                          start_time: Optional[datetime.datetime] = None,
                          end_time: Optional[datetime.datetime] = None,
                          limit: int = 100) -> List[Dict[str, Any]]:

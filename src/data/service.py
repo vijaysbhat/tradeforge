@@ -74,7 +74,7 @@ class DataService:
             for t in trades_data
         ]
     
-    async def get_candles(self, provider_name: str, symbol: str, interval: str,
+    async def get_candles(self, provider_name: str, symbol: str, interval: str = "1m",
                          start_time: Optional[datetime.datetime] = None,
                          end_time: Optional[datetime.datetime] = None,
                          limit: int = 100) -> List[Candle]:
