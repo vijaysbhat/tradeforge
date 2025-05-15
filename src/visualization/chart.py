@@ -124,8 +124,12 @@ class TradingChart:
                 "volume": candle.volume
             })
         
-        with open(self.candles_file, 'w') as f:
-            json.dump(candles_data, f)
+        try:
+            with open(self.candles_file, 'w') as f:
+                json.dump(candles_data, f)
+            logger.debug(f"Saved {len(candles_data)} candles to {self.candles_file}")
+        except Exception as e:
+            logger.error(f"Error saving candles data: {e}")
     
     def _save_indicators(self):
         """Save indicator data to file."""
@@ -134,8 +138,12 @@ class TradingChart:
             "long_ma": [(t.isoformat(), v) for t, v in self.long_ma_values]
         }
         
-        with open(self.indicators_file, 'w') as f:
-            json.dump(indicators_data, f)
+        try:
+            with open(self.indicators_file, 'w') as f:
+                json.dump(indicators_data, f)
+            logger.debug(f"Saved indicators data to {self.indicators_file}")
+        except Exception as e:
+            logger.error(f"Error saving indicators data: {e}")
     
     def _save_signals(self):
         """Save signals data to file."""
@@ -144,8 +152,12 @@ class TradingChart:
             "sell": [(t.isoformat(), p) for t, p in self.sell_signals]
         }
         
-        with open(self.signals_file, 'w') as f:
-            json.dump(signals_data, f)
+        try:
+            with open(self.signals_file, 'w') as f:
+                json.dump(signals_data, f)
+            logger.debug(f"Saved signals data to {self.signals_file}")
+        except Exception as e:
+            logger.error(f"Error saving signals data: {e}")
     
     def plot(self, show: bool = False, save: bool = True) -> None:
         """

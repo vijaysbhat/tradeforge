@@ -5,6 +5,7 @@ import os
 import sys
 import signal
 import json
+import importlib
 from typing import Dict, Any
 
 # Add the project root to the Python path
@@ -212,7 +213,8 @@ async def setup_services(config: Dict[str, Any]):
     trading_engine.add_signal_handler(on_strategy_signal)
     
     # Discover available strategies
-    strategy_service.discover_strategies()
+    available_strategies = strategy_service.discover_strategies()
+    logger.info(f"Available strategies: {available_strategies}")
     
     # Load strategies
     for strategy_id, strategy_config in config.get("strategies", {}).items():

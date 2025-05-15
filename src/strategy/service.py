@@ -40,7 +40,15 @@ class StrategyService:
                 try:
                     # Import the module
                     module_path = f"{strategies_dir.replace('/', '.')}.{module_name}"
-                    module = importlib.import_module(module_path)
+                    self.logger.info(f"Attempting to import module: {module_path}")
+                    
+                    # Try to reload the module if it's already loaded
+                    if module_path in sys.modules:
+                        module = importlib.reload(sys.modules[module_path])
+                        self.logger.info(f"Reloaded existing module: {module_path}")
+                    else:
+                        module = importlib.import_module(module_path)
+                        self.logger.info(f"Imported new module: {module_path}")
                     
                     # Find all Strategy subclasses in the module
                     for name, obj in inspect.getmembers(module):
@@ -52,9 +60,17 @@ class StrategyService:
                             self.strategy_classes[strategy_id] = obj
                             strategy_classes.append(strategy_id)
                             self.logger.info(f"Discovered strategy: {strategy_id}")
-                
+                            
+                            # Also register the strategy by its class name for easier lookup
+                            self.strategy_classes[name] = obj
+                            
+                except ImportError as ie:
+                    self.logger.error(f"Import error loading strategy module {module_name}: {str(ie)}")
+                    self.logger.error(f"Module search path: {sys.path}")
                 except Exception as e:
                     self.logger.error(f"Error loading strategy module {module_name}: {str(e)}")
+                    import traceback
+                    self.logger.error(traceback.format_exc())
         
         return strategy_classes
     
@@ -72,15 +88,23 @@ class StrategyService:
         # Check if the strategy_id is a direct class name or a full path
         if strategy_id in self.strategy_classes:
             strategy_class = self.strategy_classes[strategy_id]
+            self.logger.info(f"Found strategy class directly: {strategy_id}")
         else:
             # Try to find the strategy by class name only
             matching_strategies = [sid for sid in self.strategy_classes.keys() 
                                   if sid.endswith(f".{strategy_id}") or sid.split(".")[-1] == strategy_id]
+            
+            # Also try to match by the SimpleMovingAverageStrategy class name
+            if not matching_strategies and strategy_id == "simple_moving_average":
+                matching_strategies = [sid for sid in self.strategy_classes.keys() 
+                                      if "SimpleMovingAverageStrategy" in sid]
+                
             if matching_strategies:
                 strategy_id = matching_strategies[0]
                 strategy_class = self.strategy_classes[strategy_id]
+                self.logger.info(f"Found strategy class by matching: {strategy_id}")
             else:
-                self.logger.error(f"Strategy {strategy_id} not found")
+                self.logger.error(f"Strategy {strategy_id} not found. Available strategies: {list(self.strategy_classes.keys())}")
                 return None
         
         try:
