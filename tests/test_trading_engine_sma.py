@@ -177,8 +177,9 @@ async def trading_environment():
 @pytest.mark.asyncio
 async def test_sma_buy_signal_generation(trading_environment):
     """Test that the SMA strategy generates a buy signal when short MA crosses above long MA."""
-    trading_engine = trading_environment["trading_engine"]
-    strategy = trading_environment["strategy"]
+    environment = await anext(trading_environment)
+    trading_engine = environment["trading_engine"]
+    strategy = environment["strategy"]
     
     # Make sure account balance is set
     strategy.account_balance = 10000.0
