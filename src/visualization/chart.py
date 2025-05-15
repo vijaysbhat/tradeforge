@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import os
+import json
 from typing import List, Dict, Any, Optional, Tuple
 import logging
 
@@ -36,10 +37,34 @@ class TradingChart:
         # Create save directory if it doesn't exist
         os.makedirs(save_path, exist_ok=True)
         
-        # Set up the plot
+        # Data file paths
+        self.data_dir = os.path.join(save_path, "data")
+        os.makedirs(self.data_dir, exist_ok=True)
+        self.candles_file = os.path.join(self.data_dir, f"{symbol}_candles.json")
+        self.indicators_file = os.path.join(self.data_dir, f"{symbol}_indicators.json")
+        self.signals_file = os.path.join(self.data_dir, f"{symbol}_signals.json")
+        
+        # Set up the plot for saving images
         plt.style.use('dark_background')  # Use dark theme for better visibility
         self.fig, self.ax = plt.subplots(figsize=(12, 8))
         self.fig.tight_layout()
+        
+        # Initialize data files if they don't exist
+        self._initialize_data_files()
+    
+    def _initialize_data_files(self):
+        """Initialize data files with empty data if they don't exist."""
+        if not os.path.exists(self.candles_file):
+            with open(self.candles_file, 'w') as f:
+                json.dump([], f)
+        
+        if not os.path.exists(self.indicators_file):
+            with open(self.indicators_file, 'w') as f:
+                json.dump({"short_ma": [], "long_ma": []}, f)
+        
+        if not os.path.exists(self.signals_file):
+            with open(self.signals_file, 'w') as f:
+                json.dump({"buy": [], "sell": []}, f)
     
     def add_candle(self, candle: Candle) -> None:
         """
@@ -49,6 +74,9 @@ class TradingChart:
             candle: Candle data to add
         """
         self.candles.append(candle)
+        
+        # Save to file
+        self._save_candles()
     
     def update_moving_averages(self, short_ma: float, long_ma: float) -> None:
         """
@@ -62,6 +90,9 @@ class TradingChart:
             timestamp = self.candles[-1].timestamp
             self.short_ma_values.append((timestamp, short_ma))
             self.long_ma_values.append((timestamp, long_ma))
+            
+            # Save to file
+            self._save_indicators()
     
     def add_signal(self, timestamp: datetime, price: float, side: OrderSide) -> None:
         """
@@ -76,6 +107,45 @@ class TradingChart:
             self.buy_signals.append((timestamp, price))
         elif side == OrderSide.SELL:
             self.sell_signals.append((timestamp, price))
+        
+        # Save to file
+        self._save_signals()
+    
+    def _save_candles(self):
+        """Save candles data to file."""
+        candles_data = []
+        for candle in self.candles:
+            candles_data.append({
+                "timestamp": candle.timestamp.isoformat(),
+                "open": candle.open,
+                "high": candle.high,
+                "low": candle.low,
+                "close": candle.close,
+                "volume": candle.volume
+            })
+        
+        with open(self.candles_file, 'w') as f:
+            json.dump(candles_data, f)
+    
+    def _save_indicators(self):
+        """Save indicator data to file."""
+        indicators_data = {
+            "short_ma": [(t.isoformat(), v) for t, v in self.short_ma_values],
+            "long_ma": [(t.isoformat(), v) for t, v in self.long_ma_values]
+        }
+        
+        with open(self.indicators_file, 'w') as f:
+            json.dump(indicators_data, f)
+    
+    def _save_signals(self):
+        """Save signals data to file."""
+        signals_data = {
+            "buy": [(t.isoformat(), p) for t, p in self.buy_signals],
+            "sell": [(t.isoformat(), p) for t, p in self.sell_signals]
+        }
+        
+        with open(self.signals_file, 'w') as f:
+            json.dump(signals_data, f)
     
     def plot(self, show: bool = False, save: bool = True) -> None:
         """
@@ -193,6 +263,11 @@ class TradingChart:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{self.save_path}/{self.symbol}_{timestamp}.png"
             plt.savefig(filename, bbox_inches='tight')
+            
+            # Also save a "latest" version that's always overwritten
+            latest_filename = f"{self.save_path}/{self.symbol}_latest.png"
+            plt.savefig(latest_filename, bbox_inches='tight')
+            
             logger.info(f"Chart saved to {filename}")
         
         # Show the chart if requested

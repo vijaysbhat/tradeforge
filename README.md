@@ -307,6 +307,16 @@ Example:
 python scripts/view_charts.py --symbol ETHUSD --interval 2
 ```
 
+### How the Visualization Works
+
+The visualization system works by:
+
+1. The trading engine writes trading data (candles, indicators, signals) to JSON files in the `charts/data` directory
+2. The view_charts.py script reads these files and creates real-time visualizations
+3. Charts are also saved as PNG images in the `charts` directory
+
+This approach allows you to view charts in a separate process from the trading engine.
+
 ### Customizing Visualization
 
 You can customize the visualization by modifying the `src/visualization/chart.py` file:
