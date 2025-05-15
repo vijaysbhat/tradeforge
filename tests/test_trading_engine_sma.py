@@ -123,6 +123,12 @@ async def trading_setup():
                 await asyncio.wait_for(task, timeout=0.1)
             except (asyncio.TimeoutError, asyncio.CancelledError):
                 pass
+    
+    # Clean up logging handlers to prevent "I/O operation on closed file" errors
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        handler.close()
+        root_logger.removeHandler(handler)
 
 
 @pytest.mark.asyncio
