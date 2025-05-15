@@ -108,6 +108,7 @@ async def trading_setup():
         "strategy_service": strategy_service
     }
     
+    print("HELOOO!!!")
     # Stop the trading engine and ensure all tasks are cleaned up
     await trading_engine.stop()
     
