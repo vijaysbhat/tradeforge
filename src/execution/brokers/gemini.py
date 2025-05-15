@@ -175,10 +175,10 @@ class GeminiBroker(Broker):
             raise Exception(f"Network error when connecting to Gemini API: {str(e)}")
     
     async def get_account_info(self) -> Dict[str, Any]:
-        data = await self._make_private_request("/v1/account")
+        data = await self._make_private_request("/v1/balances")
         
         balances = []
-        for balance in data.get("balances", []):
+        for balance in data:
             balances.append(Balance(
                 asset=balance.get("currency", ""),
                 free=float(balance.get("available", 0)),
@@ -186,7 +186,7 @@ class GeminiBroker(Broker):
             ))
         
         return {
-            "id": data.get("account", {}).get("id", ""),
+            "id": "",  # Balances endpoint doesn't return account ID
             "balances": balances,
             "raw_data": data
         }
