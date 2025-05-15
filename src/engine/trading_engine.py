@@ -174,6 +174,7 @@ class TradingEngine:
         # Wait for the main loop task to complete
         if hasattr(self, 'main_loop_task') and not self.main_loop_task.done():
             self.logger.debug("Cancelling main loop task")
+            self.logger.debug(f"Main loop task details: name={self.main_loop_task.get_name()}, coro={self.main_loop_task.get_coro()}")
             self.main_loop_task.cancel()
             try:
                 # Wait with a longer timeout
@@ -191,7 +192,8 @@ class TradingEngine:
 
         if tasks:
             self.logger.debug(f"Cancelling {len(tasks)} remaining engine tasks")
-            for task in tasks:
+            for i, task in enumerate(tasks):
+                self.logger.debug(f"  Task {i+1}: name={task.get_name()}, coro={task.get_coro()}")
                 task.cancel()
 
             # Wait for all tasks to be cancelled with a short timeout
@@ -200,6 +202,8 @@ class TradingEngine:
                     done, pending = await asyncio.wait(tasks, timeout=0.5)
                     if pending:
                         self.logger.debug(f"Some tasks still pending after timeout: {len(pending)}")
+                        for i, task in enumerate(pending):
+                            self.logger.debug(f"  Still pending task {i+1}: name={task.get_name()}, coro={task.get_coro()}")
                 except Exception as e:
                     self.logger.debug(f"Error waiting for tasks to cancel: {e}")
 

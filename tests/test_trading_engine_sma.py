@@ -3,6 +3,8 @@ import datetime
 from unittest.mock import Mock, AsyncMock
 import pytest
 import logging
+import traceback
+import sys
 
 from src.data.models import Candle, Ticker, OrderBook, Trade
 from src.data.service import DataService
@@ -13,12 +15,6 @@ from src.engine.trading_engine import TradingEngine
 from src.strategy.base import StrategySignal
 from src.strategy.service import StrategyService
 from strategies.simple_moving_average import SimpleMovingAverageStrategy
-
-
-import asyncio
-import logging
-import traceback
-import sys
 
 def log_pending_task_destruction(task):
     if not task.done() and not task.cancelled():
@@ -45,7 +41,10 @@ asyncio.Task.set_destroy_hook(log_pending_task_destruction)
 
 
 @pytest.fixture
-async def trading_setup():    
+async def trading_environment():
+    """Combined fixture for trading setup and cleanup to ensure proper task management."""
+    logging.info("Setting up trading environment")
+    
     # Create mock services
     data_service = Mock(spec=DataService)
     execution_service = Mock(spec=ExecutionService)
@@ -97,7 +96,7 @@ async def trading_setup():
             Balance(asset="USD", free=10000.0, locked=0.0),
             Balance(asset="BTC", free=1.0, locked=0.0)
         ],
-        raw_data={}  # Add the missing raw_data parameter
+        raw_data={}
     )
     execution_service.get_account_info.return_value = account
     
@@ -109,7 +108,7 @@ async def trading_setup():
             entry_price=0.0,
             mark_price=10000.0,
             unrealized_pnl=0.0,
-            raw_data={}  # Add the missing raw_data parameter
+            raw_data={}
         )
     ]
     execution_service.get_positions.return_value = positions
@@ -118,65 +117,80 @@ async def trading_setup():
     execution_service.get_orders.return_value = []
     
     await trading_engine.start()
-
-    logging.info("Trading engine started, yielding setup")
-
+    
     logging.info("Trading engine started")
-
-    # Return the setup dictionary directly
-    result = {
+    
+    # Create a setup dictionary
+    setup = {
         "trading_engine": trading_engine,
         "strategy": strategy,
         "data_service": data_service,
         "execution_service": execution_service,
         "strategy_service": strategy_service
     }
-
-    return result
-
-@pytest.fixture
-async def trading_cleanup(trading_setup):
-    # Get the trading engine from the setup
-    setup = await trading_setup
-    trading_engine = setup["trading_engine"]
-
-    # Yield control to the test
-    yield
-
-    # Cleanup code runs after the test
-    logging.info("Test completed, cleaning up")
-    await trading_engine.stop()
-    logging.info("Trading engine stopped")
-
-    # Allow a short time for any remaining tasks to clean up
-    await asyncio.sleep(0.1)
-
-    # Get all pending tasks
-    pending_tasks = [t for t in asyncio.all_tasks()
-                    if t is not asyncio.current_task() and not t.done()]
-
-    # Cancel all pending tasks
-    for task in pending_tasks:
-        task.cancel()
-
-    # Wait for all tasks to complete with a timeout
-    if pending_tasks:
-        try:
-            # Wait for all tasks to be cancelled
-            await asyncio.wait(pending_tasks, timeout=0.5)
-        except Exception as e:
-            logging.debug(f"Error waiting for tasks to cancel: {e}")
-
-    logging.info("Cleanup complete")
+    
+    try:
+        # Yield the setup to the test
+        yield setup
+    finally:
+        # This will always run after the test completes
+        logging.info("Test completed, cleaning up")
+        
+        # Log all pending tasks before stopping the engine
+        pending_before_stop = [t for t in asyncio.all_tasks() 
+                              if t is not asyncio.current_task() and not t.done()]
+        
+        if pending_before_stop:
+            logging.warning(f"Found {len(pending_before_stop)} pending tasks before stopping engine:")
+            for i, task in enumerate(pending_before_stop):
+                logging.warning(f"  Task {i+1}: name={task.get_name()}, coro={task.get_coro()}")
+        
+        # Stop the trading engine
+        logging.info("Stopping trading engine")
+        await trading_engine.stop()
+        logging.info("Trading engine stopped")
+        
+        # Allow a short time for any remaining tasks to clean up
+        await asyncio.sleep(0.1)
+        
+        # Get all pending tasks after stopping the engine
+        pending_tasks = [t for t in asyncio.all_tasks()
+                        if t is not asyncio.current_task() and not t.done()]
+        
+        if pending_tasks:
+            logging.warning(f"Found {len(pending_tasks)} pending tasks after stopping engine:")
+            for i, task in enumerate(pending_tasks):
+                logging.warning(f"  Task {i+1}: name={task.get_name()}, coro={task.get_coro()}")
+            
+            # Cancel all pending tasks
+            for task in pending_tasks:
+                task.cancel()
+            
+            # Wait for all tasks to complete with a timeout
+            try:
+                # Wait for all tasks to be cancelled
+                await asyncio.wait(pending_tasks, timeout=0.5)
+            except Exception as e:
+                logging.debug(f"Error waiting for tasks to cancel: {e}")
+        
+        # Check if any tasks are still pending after cancellation
+        final_tasks = [t for t in asyncio.all_tasks() 
+                      if t is not asyncio.current_task() and not t.done()]
+        
+        if final_tasks:
+            logging.error(f"Still have {len(final_tasks)} pending tasks after cancellation:")
+            for i, task in enumerate(final_tasks):
+                logging.error(f"  Task {i+1}: name={task.get_name()}, coro={task.get_coro()}")
+        
+        logging.info("Cleanup complete")
 
 
 
 @pytest.mark.asyncio
-async def test_sma_buy_signal_generation(trading_setup, trading_cleanup):
+async def test_sma_buy_signal_generation(trading_environment):
     """Test that the SMA strategy generates a buy signal when short MA crosses above long MA."""
-    setup = await trading_setup
-    trading_engine = setup["trading_engine"]
-    strategy = setup["strategy"]
+    trading_engine = trading_environment["trading_engine"]
+    strategy = trading_environment["strategy"]
     
     # Make sure account balance is set
     strategy.account_balance = 10000.0
@@ -260,11 +274,10 @@ async def test_sma_buy_signal_generation(trading_setup, trading_cleanup):
 
 
 @pytest.mark.asyncio
-async def test_sma_sell_signal_generation(trading_setup):
+async def test_sma_sell_signal_generation(trading_environment):
     """Test that the SMA strategy generates a sell signal when short MA crosses below long MA."""
-    setup = await anext(trading_setup)  # Properly await the async generator
-    trading_engine = setup["trading_engine"]
-    strategy = setup["strategy"]
+    trading_engine = trading_environment["trading_engine"]
+    strategy = trading_environment["strategy"]
     
     # First, set up a position and account balance
     strategy.current_position = 0.5  # Set position in strategy
@@ -350,10 +363,9 @@ async def test_sma_sell_signal_generation(trading_setup):
 
 
 @pytest.mark.asyncio
-async def test_trading_engine_processes_signal(trading_setup):
+async def test_trading_engine_processes_signal(trading_environment):
     """Test that the trading engine correctly processes a strategy signal."""
-    setup = await anext(trading_setup)  # Properly await the async generator
-    trading_engine = setup["trading_engine"]
+    trading_engine = trading_environment["trading_engine"]
     
     # Create a signal
     signal = StrategySignal(
@@ -386,11 +398,10 @@ async def test_trading_engine_processes_signal(trading_setup):
 
 
 @pytest.mark.asyncio
-async def test_position_update_notification(trading_setup):
+async def test_position_update_notification(trading_environment):
     """Test that position updates are correctly processed by the strategy."""
-    setup = await anext(trading_setup)  # Properly await the async generator
-    trading_engine = setup["trading_engine"]
-    strategy = setup["strategy"]
+    trading_engine = trading_environment["trading_engine"]
+    strategy = trading_environment["strategy"]
     
     # Mock the strategy's on_position_update method
     original_on_position_update = strategy.on_position_update
@@ -417,11 +428,10 @@ async def test_position_update_notification(trading_setup):
 
 
 @pytest.mark.asyncio
-async def test_account_update_notification(trading_setup):
+async def test_account_update_notification(trading_environment):
     """Test that account updates are correctly processed by the strategy."""
-    setup = await anext(trading_setup)  # Properly await the async generator
-    trading_engine = setup["trading_engine"]
-    strategy = setup["strategy"]
+    trading_engine = trading_environment["trading_engine"]
+    strategy = trading_environment["strategy"]
     
     # Mock the strategy's on_account_update method
     original_on_account_update = strategy.on_account_update
@@ -448,11 +458,10 @@ async def test_account_update_notification(trading_setup):
 
 
 @pytest.mark.asyncio
-async def test_order_update_notification(trading_setup):
+async def test_order_update_notification(trading_environment):
     """Test that order updates are correctly processed by the strategy."""
-    setup = await anext(trading_setup)  # Properly await the async generator
-    trading_engine = setup["trading_engine"]
-    strategy = setup["strategy"]
+    trading_engine = trading_environment["trading_engine"]
+    strategy = trading_environment["strategy"]
     
     # Mock the strategy's on_order_update method
     original_on_order_update = strategy.on_order_update
