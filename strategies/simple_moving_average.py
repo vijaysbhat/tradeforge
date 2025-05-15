@@ -137,6 +137,7 @@ class SimpleMovingAverageStrategy(Strategy):
         """
         candles = self.candles.get(interval, [])
         if len(candles) < self.long_period:
+            self.logger.debug(f"Not enough candles: {len(candles)} < {self.long_period}")
             return  # Not enough data
         
         # Calculate short-term moving average
@@ -151,24 +152,36 @@ class SimpleMovingAverageStrategy(Strategy):
         # Calculate previous long-term moving average
         prev_long_ma = sum(c.close for c in candles[-self.long_period-1:-1]) / self.long_period
         
+        # Log the current MA values for debugging
+        self.logger.info(f"MAs: short={short_ma:.2f}, long={long_ma:.2f}, prev_short={prev_short_ma:.2f}, prev_long={prev_long_ma:.2f}")
+        
         # Check for crossover
         current_time = datetime.datetime.now()
         
         # Check if we're in cooldown period
         if self.last_signal_time and current_time - self.last_signal_time < self.signal_cooldown:
+            self.logger.debug(f"In cooldown period, last signal: {self.last_signal_time}")
             return
         
         # Buy signal: short MA crosses above long MA
         if prev_short_ma <= prev_long_ma and short_ma > long_ma:
+            self.logger.info(f"BUY SIGNAL DETECTED: short MA ({short_ma:.2f}) crossed above long MA ({long_ma:.2f})")
             if self.current_position <= 0:
                 self._generate_buy_signal(candles[-1].close)
                 self.last_signal_time = current_time
+            else:
+                self.logger.info(f"Already have position: {self.current_position}, not buying")
         
         # Sell signal: short MA crosses below long MA
         elif prev_short_ma >= prev_long_ma and short_ma < long_ma:
+            self.logger.info(f"SELL SIGNAL DETECTED: short MA ({short_ma:.2f}) crossed below long MA ({long_ma:.2f})")
             if self.current_position > 0:
                 self._generate_sell_signal(candles[-1].close)
                 self.last_signal_time = current_time
+            else:
+                self.logger.info(f"No position to sell: {self.current_position}")
+        else:
+            self.logger.debug(f"No crossover detected")
     
     def _generate_buy_signal(self, price: float) -> None:
         """
