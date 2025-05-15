@@ -21,13 +21,16 @@ from src.strategy.base import StrategySignal
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Change to DEBUG level to capture detailed logs
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler('trading_engine.log')
     ]
 )
+
+# Set specific loggers to DEBUG level
+logging.getLogger('src.execution.brokers.gemini').setLevel(logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 

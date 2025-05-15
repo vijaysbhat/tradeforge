@@ -5,6 +5,7 @@ import json
 import hmac
 import base64
 import hashlib
+import logging
 import time
 from typing import Dict, List, Any, Optional
 
@@ -47,16 +48,34 @@ class GeminiBroker(Broker):
         await self._ensure_session()
         url = f"{self.base_url}{endpoint}"
         
-        async with self.session.get(url, params=params) as response:
-            if response.status != 200:
-                error_text = await response.text()
-                # If we hit rate limit, wait and retry
-                if response.status == 429:
-                    retry_after = int(response.headers.get('Retry-After', '5'))
-                    await asyncio.sleep(retry_after)
-                    return await self._make_public_request(endpoint, params)
-                raise Exception(f"Gemini API error: {response.status} - {error_text}")
-            return await response.json()
+        # Debug logging for API request
+        logging.debug(f"Making Gemini public API request to: {url}")
+        logging.debug(f"Sandbox mode: {self.sandbox}")
+        logging.debug(f"Params: {params}")
+        
+        try:
+            async with self.session.get(url, params=params) as response:
+                response_text = await response.text()
+                logging.debug(f"Received response from {url}: {response.status} - {response_text[:200]}...")
+                
+                if response.status != 200:
+                    error_text = response_text
+                    # If we hit rate limit, wait and retry
+                    if response.status == 429:
+                        retry_after = int(response.headers.get('Retry-After', '5'))
+                        await asyncio.sleep(retry_after)
+                        return await self._make_public_request(endpoint, params)
+                    
+                    # Log detailed error information
+                    logging.error(f"Gemini API error for URL: {url}")
+                    logging.error(f"Params: {params}")
+                    logging.error(f"Response: {error_text}")
+                    
+                    raise Exception(f"Gemini API error: {response.status} - {error_text}")
+                return await response.json()
+        except aiohttp.ClientError as e:
+            logging.error(f"Network error when connecting to Gemini API at {url}: {str(e)}")
+            raise Exception(f"Network error when connecting to Gemini API: {str(e)}")
     
     async def _apply_rate_limit(self):
         """Apply rate limiting to avoid hitting API limits."""
@@ -84,6 +103,11 @@ class GeminiBroker(Broker):
         await self._ensure_session()
         url = f"{self.base_url}{endpoint}"
         
+        # Debug logging for API request
+        logging.debug(f"Making Gemini API request to: {url}")
+        logging.debug(f"Sandbox mode: {self.sandbox}")
+        logging.debug(f"API Key: {self.api_key[:5]}...{self.api_key[-5:] if self.api_key else 'None'}")
+        
         if payload is None:
             payload = {}
         
@@ -110,8 +134,11 @@ class GeminiBroker(Broker):
         }
         
         try:
+            logging.debug(f"Sending request to {url} with payload: {json.dumps(payload)}")
             async with self.session.post(url, headers=headers) as response:
                 response_text = await response.text()
+                logging.debug(f"Received response from {url}: {response.status} - {response_text[:200]}...")
+                
                 if response.status != 200:
                     # Check for nonce error and provide a more helpful message
                     if "Nonce" in response_text and "not within" in response_text:
@@ -121,10 +148,19 @@ class GeminiBroker(Broker):
                         retry_after = int(response.headers.get('Retry-After', '5'))
                         await asyncio.sleep(retry_after)
                         return await self._make_private_request(endpoint, payload)
+                    
+                    # Log detailed error information for API key errors
+                    if "InvalidApiKey" in response_text:
+                        logging.error(f"Invalid API key error for URL: {url}")
+                        logging.error(f"Sandbox mode: {self.sandbox}")
+                        logging.error(f"API Key length: {len(self.api_key) if self.api_key else 0}")
+                        logging.error(f"API Secret length: {len(self.api_secret) if self.api_secret else 0}")
+                    
                     raise Exception(f"Gemini API error: {response.status} - {response_text}")
                 
                 return json.loads(response_text)
         except aiohttp.ClientError as e:
+            logging.error(f"Network error when connecting to Gemini API at {url}: {str(e)}")
             raise Exception(f"Network error when connecting to Gemini API: {str(e)}")
     
     async def get_account_info(self) -> Dict[str, Any]:
