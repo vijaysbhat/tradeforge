@@ -5,7 +5,7 @@ import time
 from typing import Dict, List, Any, Optional, Set, Callable
 
 from ..data.service import DataService
-from ..data.models import Ticker, OrderBook, Trade, Candle
+from ..data.models import Ticker, OrderBook, Trade, Candle, OrderBookEntry
 from ..execution.service import ExecutionService
 from ..execution.base import OrderSide, OrderType, OrderStatus
 from ..execution.models import Order, Position, Account
