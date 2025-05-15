@@ -241,7 +241,7 @@ async def setup_services(config: Dict[str, Any]):
     for symbol in config.get("symbols", []):
         for provider_name in config.get("providers", ["gemini"]):
             await trading_engine.subscribe_market_data(
-                provider_name, symbol, ["ticker", "trades"]
+                provider_name, symbol, ["ticker", "trades"], ["1m", "5m", "15m"]
             )
     
     # Fetch historical data for strategies
