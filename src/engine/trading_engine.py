@@ -593,9 +593,32 @@ class TradingEngine:
             self.logger.error(f"Error updating data for broker {broker_name}: {str(e)}")
     
     async def _update_strategies_timer(self) -> None:
-        """Update all strategies with timer event."""
+        """Update all strategies with timer event and check for candle completion."""
         current_time = datetime.datetime.now()
         
+        # Check for candle completion based on time
+        for symbol, intervals in self.candle_aggregators.items():
+            for interval, aggregator in intervals.items():
+                completed_candle = aggregator.check_candle_completion(current_time)
+                
+                # If a candle was completed, notify strategies and update chart
+                if completed_candle:
+                    # Find the provider for this symbol
+                    providers = set(p for s, c, p in self.subscriptions if s == symbol)
+                    for provider in providers:
+                        # Notify strategies
+                        for strategy_id, strategy in self.strategy_service.get_all_strategies().items():
+                            try:
+                                strategy.on_candle(completed_candle, symbol, interval, provider)
+                            except Exception as e:
+                                self.logger.error(f"Error in strategy {strategy_id} candle update: {str(e)}")
+                    
+                    # Update chart (use 1m candles for the chart)
+                    if interval == "1m" and symbol in self.charts:
+                        self.charts[symbol].add_candle(completed_candle)
+                        self.logger.debug(f"Added time-completed candle to chart for {symbol}")
+        
+        # Update strategies with timer event
         for strategy_id, strategy in self.strategy_service.get_all_strategies().items():
             try:
                 strategy.on_timer(current_time)
@@ -653,11 +676,31 @@ class TradingEngine:
             symbol: Trading symbol
             provider: Data provider name
         """
+        # Notify strategies
         for strategy_id, strategy in self.strategy_service.get_all_strategies().items():
             try:
                 strategy.on_ticker(ticker, symbol, provider)
             except Exception as e:
                 self.logger.error(f"Error in strategy {strategy_id} ticker update: {str(e)}")
+        
+        # Update candle aggregators
+        if symbol in self.candle_aggregators:
+            for interval, aggregator in self.candle_aggregators[symbol].items():
+                completed_candle, current_candle = aggregator.process_ticker(ticker)
+                
+                # If a candle was completed, notify strategies and update chart
+                if completed_candle:
+                    # Notify strategies
+                    for strategy_id, strategy in self.strategy_service.get_all_strategies().items():
+                        try:
+                            strategy.on_candle(completed_candle, symbol, interval, provider)
+                        except Exception as e:
+                            self.logger.error(f"Error in strategy {strategy_id} candle update: {str(e)}")
+                    
+                    # Update chart (use 1m candles for the chart)
+                    if interval == "1m" and symbol in self.charts:
+                        self.charts[symbol].add_candle(completed_candle)
+                        self.logger.debug(f"Added completed candle to chart for {symbol}")
     
     def _orderbook_callback(self, orderbook: OrderBook, symbol: str, provider: str) -> None:
         """
@@ -683,11 +726,31 @@ class TradingEngine:
             symbol: Trading symbol
             provider: Data provider name
         """
+        # Notify strategies
         for strategy_id, strategy in self.strategy_service.get_all_strategies().items():
             try:
                 strategy.on_trade(trade, symbol, provider)
             except Exception as e:
                 self.logger.error(f"Error in strategy {strategy_id} trade update: {str(e)}")
+        
+        # Update candle aggregators
+        if symbol in self.candle_aggregators:
+            for interval, aggregator in self.candle_aggregators[symbol].items():
+                completed_candle, current_candle = aggregator.process_trade(trade)
+                
+                # If a candle was completed, notify strategies and update chart
+                if completed_candle:
+                    # Notify strategies
+                    for strategy_id, strategy in self.strategy_service.get_all_strategies().items():
+                        try:
+                            strategy.on_candle(completed_candle, symbol, interval, provider)
+                        except Exception as e:
+                            self.logger.error(f"Error in strategy {strategy_id} candle update: {str(e)}")
+                    
+                    # Update chart (use 1m candles for the chart)
+                    if interval == "1m" and symbol in self.charts:
+                        self.charts[symbol].add_candle(completed_candle)
+                        self.logger.debug(f"Added completed candle to chart for {symbol}")
     
     async def fetch_candles(self, provider: str, symbol: str, interval: str,
                            start_time: Optional[datetime.datetime] = None,
