@@ -155,58 +155,54 @@ class TradingEngine:
         """Stop the trading engine."""
         if not self.running:
             return
-        
+
         self.running = False
         self.logger.info("Stopping trading engine")
-        
+
         # Just clear subscriptions without trying to unsubscribe individually
         # The data_service.close_all() will handle closing all connections
         self.logger.info(f"Clearing {len(self.subscriptions)} subscriptions")
         self.subscriptions.clear()
-        
+
         # Close all services
         self.logger.info("Closing all data services")
         await self.data_service.close_all()
-        
+
         self.logger.info("Closing all execution services")
         await self.execution_service.close_all()
-        
+
         # Wait for the main loop task to complete
         if hasattr(self, 'main_loop_task') and not self.main_loop_task.done():
+            self.logger.debug("Cancelling main loop task")
+            self.main_loop_task.cancel()
             try:
-                # Give the task a short time to complete gracefully
-                await asyncio.wait_for(self.main_loop_task, timeout=0.2)
-            except asyncio.TimeoutError:
-                # Cancel the task if it doesn't complete in time
-                self.main_loop_task.cancel()
-                try:
-                    # Wait with a very short timeout
-                    await asyncio.wait_for(asyncio.shield(self.main_loop_task), timeout=0.1)
-                except (asyncio.TimeoutError, asyncio.CancelledError):
-                    self.logger.debug("Main loop task cancelled")
-                except Exception as e:
-                    self.logger.debug(f"Error during main loop task cancellation: {e}")
-        
+                # Wait with a longer timeout
+                await asyncio.wait_for(self.main_loop_task, timeout=0.5)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                self.logger.debug("Main loop task cancelled")
+            except Exception as e:
+                self.logger.debug(f"Error during main loop task cancellation: {e}")
+
         # Cancel any other pending tasks created by this engine
-        tasks = [t for t in asyncio.all_tasks() 
-                if t is not asyncio.current_task() and 
-                (t.get_name().startswith('TradingEngine_') or 
-                 'TradingEngine' in str(t.get_coro()))]
-        
+        tasks = [t for t in asyncio.all_tasks()
+                if t is not asyncio.current_task() and
+                (t.get_name().startswith('TradingEngine_') or
+                'TradingEngine' in str(t.get_coro()))]
+
         if tasks:
             self.logger.debug(f"Cancelling {len(tasks)} remaining engine tasks")
             for task in tasks:
                 task.cancel()
-            
+
             # Wait for all tasks to be cancelled with a short timeout
             if tasks:
                 try:
-                    done, pending = await asyncio.wait(tasks, timeout=0.2)
+                    done, pending = await asyncio.wait(tasks, timeout=0.5)
                     if pending:
                         self.logger.debug(f"Some tasks still pending after timeout: {len(pending)}")
                 except Exception as e:
                     self.logger.debug(f"Error waiting for tasks to cancel: {e}")
-        
+
         self.logger.info("Trading engine stopped")
     
     async def subscribe_market_data(self, provider: str, symbol: str, 
@@ -427,11 +423,11 @@ class TradingEngine:
         current_task = asyncio.current_task()
         if current_task:
             current_task.set_name(f"TradingEngine_main_loop")
-        
+
         self.last_timer_time = time.time()
         self.last_broker_update_time = time.time()
         broker_update_interval = 5.0  # Update broker data every 5 seconds to avoid rate limits
-        
+
         try:
             while self.running:
                 try:
@@ -440,7 +436,7 @@ class TradingEngine:
                     if current_time - self.last_timer_time >= self.timer_interval:
                         self.last_timer_time = current_time
                         await self._update_strategies_timer()
-                    
+
                     # Update account and position data periodically with rate limiting
                     if current_time - self.last_broker_update_time >= broker_update_interval:
                         self.last_broker_update_time = current_time
@@ -450,14 +446,15 @@ class TradingEngine:
                             await self._update_broker_data(broker_name)
                             # Add delay between broker updates to avoid rate limits
                             await asyncio.sleep(0.1)  # Reduced delay for tests
-                    
+
                     # Sleep to avoid high CPU usage
-                    await asyncio.sleep(0.1)
-                    
+                    # Use a shorter sleep time to respond more quickly to stop requests
+                    await asyncio.sleep(0.05)
+
                     # Check if we should exit
                     if not self.running:
                         break
-                
+
                 except asyncio.CancelledError:
                     self.logger.debug("Main loop task cancelled")
                     break
@@ -468,6 +465,7 @@ class TradingEngine:
                     await asyncio.sleep(0.5)  # Reduced sleep time on error for tests
         finally:
             self.logger.debug("Main loop exiting")
+
     
     async def _update_broker_data(self, broker_name: str) -> None:
         """

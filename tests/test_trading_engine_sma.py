@@ -15,6 +15,35 @@ from src.strategy.service import StrategyService
 from strategies.simple_moving_average import SimpleMovingAverageStrategy
 
 
+import asyncio
+import logging
+import traceback
+import sys
+
+def log_pending_task_destruction(task):
+    if not task.done() and not task.cancelled():
+        task_info = {
+            'task_name': task.get_name(),
+            'task_id': id(task),
+            'coro': str(task.get_coro()),
+            'frame': None
+        }
+
+        # Try to get the current frame of the coroutine
+        try:
+            frame = sys._current_frames().get(task._loop._thread_id)
+            if frame:
+                task_info['frame'] = ''.join(traceback.format_stack(frame))
+        except Exception as e:
+            task_info['frame_error'] = str(e)
+
+        # Log the task information
+        logging.error(f"Task was destroyed but it is pending! Details: {task_info}")
+
+# Install the finalizer
+asyncio.Task.set_destroy_hook(log_pending_task_destruction)
+
+
 @pytest.fixture
 async def trading_setup():    
     # Create mock services
@@ -88,32 +117,48 @@ async def trading_setup():
     # Set up mock orders data
     execution_service.get_orders.return_value = []
     
-    # Start the trading engine
     await trading_engine.start()
-    
-    # Return all the objects needed for testing
-    yield {
+
+    logging.info("Trading engine started, yielding setup")
+
+    logging.info("Trading engine started")
+
+    # Return the setup dictionary directly
+    result = {
         "trading_engine": trading_engine,
         "strategy": strategy,
         "data_service": data_service,
         "execution_service": execution_service,
         "strategy_service": strategy_service
     }
-    
-    # Stop the trading engine and ensure all tasks are cleaned up
+
+    return result
+
+@pytest.fixture
+async def trading_cleanup(trading_setup):
+    # Get the trading engine from the setup
+    setup = await trading_setup
+    trading_engine = setup["trading_engine"]
+
+    # Yield control to the test
+    yield
+
+    # Cleanup code runs after the test
+    logging.info("Test completed, cleaning up")
     await trading_engine.stop()
-    
+    logging.info("Trading engine stopped")
+
     # Allow a short time for any remaining tasks to clean up
     await asyncio.sleep(0.1)
-    
+
     # Get all pending tasks
-    pending_tasks = [t for t in asyncio.all_tasks() 
+    pending_tasks = [t for t in asyncio.all_tasks()
                     if t is not asyncio.current_task() and not t.done()]
-    
+
     # Cancel all pending tasks
     for task in pending_tasks:
         task.cancel()
-    
+
     # Wait for all tasks to complete with a timeout
     if pending_tasks:
         try:
@@ -121,29 +166,15 @@ async def trading_setup():
             await asyncio.wait(pending_tasks, timeout=0.5)
         except Exception as e:
             logging.debug(f"Error waiting for tasks to cancel: {e}")
-    
-    # Clean up logging handlers to prevent "I/O operation on closed file" errors
-    root_logger = logging.getLogger()
-    for handler in root_logger.handlers[:]:
-        handler.close()
-        root_logger.removeHandler(handler)
-    
-    # Check one more time for any remaining tasks and force cancel them
-    final_tasks = [t for t in asyncio.all_tasks() 
-                  if t is not asyncio.current_task() and not t.done()]
-    
-    if final_tasks:
-        # Force cancel any remaining tasks
-        for task in final_tasks:
-            task.cancel()
-            
-        # Don't wait for them to complete, just let them be garbage collected
+
+    logging.info("Cleanup complete")
+
 
 
 @pytest.mark.asyncio
-async def test_sma_buy_signal_generation(trading_setup):
+async def test_sma_buy_signal_generation(trading_setup, trading_cleanup):
     """Test that the SMA strategy generates a buy signal when short MA crosses above long MA."""
-    setup = await anext(trading_setup)  # Properly await the async generator
+    setup = await trading_setup
     trading_engine = setup["trading_engine"]
     strategy = setup["strategy"]
     
@@ -183,7 +214,7 @@ async def test_sma_buy_signal_generation(trading_setup):
     # Feed historical candles to the strategy
     for candle in candles:
         strategy.on_candle(candle, "btcusd", "1h", "gemini")
-    
+ 
     # Reset the mock to track new calls
     trading_engine._execute_signal.reset_mock()
     
@@ -219,7 +250,7 @@ async def test_sma_buy_signal_generation(trading_setup):
     # Get the signal that was passed to execute_signal
     signal = trading_engine._execute_signal.call_args[0][0]
     
-    # Verify signal properties
+   # Verify signal properties
     assert signal.symbol == "btcusd"
     assert signal.side == OrderSide.BUY
     assert signal.order_type == OrderType.MARKET
