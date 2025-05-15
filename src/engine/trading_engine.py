@@ -659,3 +659,18 @@ class TradingEngine:
         except Exception as e:
             self.logger.error(f"Error fetching candles for {symbol}: {str(e)}")
             return []
+import datetime
+import asyncio
+import logging
+from typing import Dict, List, Any, Optional, Callable, Set, Tuple
+import time
+
+from ..data.service import DataService
+from ..data.models import Ticker, OrderBook, Trade, Candle
+from ..data.candle_aggregator import CandleAggregator
+from ..execution.service import ExecutionService
+from ..execution.models import Account, Position, Order
+from ..execution.base import OrderSide, OrderType
+from ..strategy.service import StrategyService
+from ..strategy.base import Strategy, StrategySignal
+from ..visualization.chart import TradingChart
