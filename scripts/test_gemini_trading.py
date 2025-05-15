@@ -199,12 +199,16 @@ async def main():
     
     args = parser.parse_args()
     
-    # Get API credentials from args or environment variables
-    api_key = args.api_key or os.environ.get("GEMINI_API_KEY")
-    api_secret = args.api_secret or os.environ.get("GEMINI_API_SECRET")
-    
     # Check if we should use sandbox based on args or environment
     use_sandbox = args.sandbox or os.environ.get("USE_SANDBOX", "").lower() == "true"
+    
+    # Get API credentials from args or environment variables
+    if use_sandbox:
+        api_key = args.api_key or os.environ.get("GEMINI_SANDBOX_API_KEY")
+        api_secret = args.api_secret or os.environ.get("GEMINI_SANDBOX_API_SECRET")
+    else:
+        api_key = args.api_key or os.environ.get("GEMINI_API_KEY")
+        api_secret = args.api_secret or os.environ.get("GEMINI_API_SECRET")
     
     if not api_key or not api_secret:
         print("Error: Gemini API credentials are required. Set GEMINI_API_KEY and GEMINI_API_SECRET "
