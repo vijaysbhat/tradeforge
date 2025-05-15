@@ -54,6 +54,7 @@ def load_config(config_file: str = "config.json") -> Dict[str, Any]:
                     "sandbox": True
                 }
             },
+            "use_sandbox": True,  # Global sandbox mode flag
             "strategies": {
                 "simple_moving_average": {
                     "symbol": "BTCUSD",
@@ -79,16 +80,19 @@ async def setup_services(config: Dict[str, Any]):
     # Create strategy service
     strategy_service = StrategyService()
     
+    # Get global sandbox mode
+    use_sandbox = config.get("use_sandbox", True)
+    
     # Register data providers
     for provider_name, provider_config in config.get("data_providers", {}).items():
         if provider_name == "gemini":
             provider = GeminiDataProvider(
                 api_key=provider_config.get("api_key", ""),
                 api_secret=provider_config.get("api_secret", ""),
-                sandbox=provider_config.get("sandbox", True)
+                sandbox=provider_config.get("sandbox", use_sandbox)
             )
             data_service.register_provider(provider_name, provider)
-            logger.info(f"Registered data provider: {provider_name}")
+            logger.info(f"Registered data provider: {provider_name} (sandbox: {provider.sandbox})")
     
     # Register brokers
     for broker_name, broker_config in config.get("brokers", {}).items():
@@ -96,10 +100,10 @@ async def setup_services(config: Dict[str, Any]):
             broker = GeminiBroker(
                 api_key=broker_config.get("api_key", ""),
                 api_secret=broker_config.get("api_secret", ""),
-                sandbox=broker_config.get("sandbox", True)
+                sandbox=broker_config.get("sandbox", use_sandbox)
             )
             execution_service.register_broker(broker_name, broker)
-            logger.info(f"Registered broker: {broker_name}")
+            logger.info(f"Registered broker: {broker_name} (sandbox: {broker.sandbox})")
     
     # Create trading engine
     trading_engine = TradingEngine(data_service, execution_service, strategy_service)
@@ -115,10 +119,14 @@ async def setup_services(config: Dict[str, Any]):
         # Add signal callback to config
         strategy_config["signal_callback"] = trading_engine._process_signal
         
+        # Add sandbox mode to strategy config if not already present
+        if "sandbox" not in strategy_config:
+            strategy_config["sandbox"] = use_sandbox
+        
         # Load the strategy
         strategy = strategy_service.load_strategy(strategy_id, strategy_config)
         if strategy:
-            logger.info(f"Loaded strategy: {strategy_id}")
+            logger.info(f"Loaded strategy: {strategy_id} (sandbox: {strategy_config['sandbox']})")
     
     # Start the trading engine
     await trading_engine.start()

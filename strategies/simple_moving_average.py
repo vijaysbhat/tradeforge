@@ -48,11 +48,15 @@ class SimpleMovingAverageStrategy(Strategy):
         self.long_period = config.get("long_period", self.long_period)
         self.position_size = config.get("position_size", self.position_size)
         
+        # Sandbox mode
+        self.sandbox = config.get("sandbox", True)
+        
         # Signal callback
         self.signal_callback = config.get("signal_callback")
         
         self.logger.info(f"Initialized SimpleMovingAverageStrategy for {self.symbol}")
         self.logger.info(f"Parameters: short_period={self.short_period}, long_period={self.long_period}")
+        self.logger.info(f"Running in {'sandbox' if self.sandbox else 'production'} mode")
     
     def on_ticker(self, ticker: Ticker, symbol: str, provider: str) -> None:
         """Process ticker updates."""
