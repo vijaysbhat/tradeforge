@@ -79,7 +79,8 @@ async def subscribe_to_ticker(data_service, symbol, duration=30):
     """Subscribe to real-time ticker updates for a specified duration."""
     print(f"\n=== {symbol.upper()} Live Ticker Updates (for {duration} seconds) ===")
     
-    async def ticker_callback(data):
+    # Define callback as non-async since it doesn't need to be awaited
+    def ticker_callback(data):
         if "events" in data and data["events"]:
             for event in data["events"]:
                 if event["type"] == "trade":

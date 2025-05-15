@@ -189,9 +189,12 @@ class GeminiDataProvider(MarketDataProvider):
                     async for msg in ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             data = json.loads(msg.data)
-                            # Call callback without awaiting it
+                            # Call callback and handle both async and non-async callbacks
                             try:
-                                callback(data)
+                                result = callback(data)
+                                # If callback is a coroutine, await it
+                                if asyncio.iscoroutine(result):
+                                    await result
                             except Exception as e:
                                 print(f"Error in callback: {e}")
                         elif msg.type == aiohttp.WSMsgType.ERROR:
