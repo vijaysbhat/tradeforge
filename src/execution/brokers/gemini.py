@@ -124,8 +124,9 @@ class GeminiBroker(Broker):
         # Add required fields to payload
         payload["request"] = endpoint
         
-        # Gemini API expects nonce in milliseconds
-        payload["nonce"] = str(int(time.time() * 1000))  # Use milliseconds since epoch as nonce
+        # Gemini API expects nonce in microseconds
+        # The error shows server expects seconds, not milliseconds
+        payload["nonce"] = str(int(time.time()))  # Use seconds since epoch as nonce
         
         # Encode payload as JSON and then as base64
         encoded_payload = base64.b64encode(json.dumps(payload).encode())
