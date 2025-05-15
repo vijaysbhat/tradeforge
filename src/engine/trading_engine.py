@@ -149,27 +149,19 @@ class TradingEngine:
         self.running = False
         self.logger.info("Stopping trading engine")
         
-        # Unsubscribe from all data feeds
-        for subscription in self.subscriptions.copy():
-            symbol, channel, provider = subscription
-            try:
-                if channel == "ticker":
-                    await self.data_service.unsubscribe_ticker(provider, symbol)
-                elif channel == "orderbook":
-                    await self.data_service.unsubscribe_orderbook(provider, symbol)
-                # Skip trades unsubscribe if method doesn't exist
-                # elif channel == "trades":
-                #     await self.data_service.unsubscribe_trades(provider, symbol)
-                
-                self.subscriptions.remove(subscription)
-            except Exception as e:
-                self.logger.error(f"Error unsubscribing from {channel} for {symbol}: {str(e)}")
-        
+        # Just clear subscriptions without trying to unsubscribe individually
+        # The data_service.close_all() will handle closing all connections
+        self.logger.info(f"Clearing {len(self.subscriptions)} subscriptions")
         self.subscriptions.clear()
         
         # Close all services
+        self.logger.info("Closing all data services")
         await self.data_service.close_all()
+        
+        self.logger.info("Closing all execution services")
         await self.execution_service.close_all()
+        
+        self.logger.info("Trading engine stopped")
     
     async def subscribe_market_data(self, provider: str, symbol: str, 
                                    channels: List[str] = None) -> None:

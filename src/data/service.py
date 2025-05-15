@@ -106,6 +106,17 @@ class DataService:
         
         await provider.subscribe_ticker(symbol, callback)
     
+    async def unsubscribe_ticker(self, provider_name: str, symbol: str):
+        """Unsubscribe from real-time ticker updates."""
+        provider = self.get_provider(provider_name)
+        if not provider:
+            raise ValueError(f"Provider not found: {provider_name}")
+        
+        # Most providers don't have explicit unsubscribe methods
+        # This will be handled during close() for most providers
+        if hasattr(provider, 'unsubscribe_ticker'):
+            await provider.unsubscribe_ticker(symbol)
+    
     async def subscribe_orderbook(self, provider_name: str, symbol: str, callback):
         """Subscribe to real-time order book updates."""
         provider = self.get_provider(provider_name)
@@ -114,6 +125,17 @@ class DataService:
         
         await provider.subscribe_orderbook(symbol, callback)
     
+    async def unsubscribe_orderbook(self, provider_name: str, symbol: str):
+        """Unsubscribe from real-time order book updates."""
+        provider = self.get_provider(provider_name)
+        if not provider:
+            raise ValueError(f"Provider not found: {provider_name}")
+        
+        # Most providers don't have explicit unsubscribe methods
+        # This will be handled during close() for most providers
+        if hasattr(provider, 'unsubscribe_orderbook'):
+            await provider.unsubscribe_orderbook(symbol)
+    
     async def subscribe_trades(self, provider_name: str, symbol: str, callback):
         """Subscribe to real-time trade updates."""
         provider = self.get_provider(provider_name)
@@ -121,6 +143,17 @@ class DataService:
             raise ValueError(f"Provider not found: {provider_name}")
         
         await provider.subscribe_trades(symbol, callback)
+    
+    async def unsubscribe_trades(self, provider_name: str, symbol: str):
+        """Unsubscribe from real-time trade updates."""
+        provider = self.get_provider(provider_name)
+        if not provider:
+            raise ValueError(f"Provider not found: {provider_name}")
+        
+        # Most providers don't have explicit unsubscribe methods
+        # This will be handled during close() for most providers
+        if hasattr(provider, 'unsubscribe_trades'):
+            await provider.unsubscribe_trades(symbol)
     
     async def close_all(self):
         """Close all provider connections."""
