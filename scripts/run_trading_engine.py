@@ -19,18 +19,26 @@ from src.engine.trading_engine import TradingEngine
 from src.strategy.base import StrategySignal
 
 
+# Load configuration first to get logging settings
+config = load_config()
+logging_config = config.get("logging", {})
+
 # Configure logging
+logging_level = getattr(logging, logging_config.get("level", "INFO"))
 logging.basicConfig(
-    level=logging.DEBUG,  # Change to DEBUG level to capture detailed logs
+    level=logging_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('trading_engine.log')
+        logging.FileHandler(logging_config.get("file", "trading_engine.log"))
     ]
 )
 
-# Set specific loggers to DEBUG level
-logging.getLogger('src.execution.brokers.gemini').setLevel(logging.DEBUG)
+# Set specific loggers based on configuration
+for module, level in logging_config.get("modules", {}).items():
+    logging.getLogger(module).setLevel(getattr(logging, level))
+
+logger.info(f"Logging configured at {logging_level} level")
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +66,35 @@ def load_config(config_file: str = "config.json") -> Dict[str, Any]:
     
     try:
         with open(config_file, 'r') as f:
-            return json.load(f)
+            config = json.load(f)
+            
+            # Reconfigure logging based on loaded config
+            logging_config = config.get("logging", {})
+            logging_level = getattr(logging, logging_config.get("level", "INFO"))
+            
+            # Reset root logger
+            for handler in logging.root.handlers[:]:
+                logging.root.removeHandler(handler)
+                
+            logging.basicConfig(
+                level=logging_level,
+                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                handlers=[
+                    logging.StreamHandler(),
+                    logging.FileHandler(logging_config.get("file", "trading_engine.log"))
+                ]
+            )
+            
+            # Set specific loggers based on configuration
+            for module, level in logging_config.get("modules", {}).items():
+                logging.getLogger(module).setLevel(getattr(logging, level))
+                
+            logger.info(f"Logging reconfigured at {logging_level} level")
+            
+            return config
     except FileNotFoundError:
         logger.warning(f"Config file {config_file} not found, using default configuration")
-        return {
+        default_config = {
             "data_providers": {
                 "gemini": {
                     "api_key": gemini_api_key,
@@ -91,8 +124,40 @@ def load_config(config_file: str = "config.json") -> Dict[str, Any]:
                     "position_size": 0.1
                 }
             },
-            "symbols": ["BTCUSD", "ETHUSD"]
+            "symbols": ["BTCUSD", "ETHUSD"],
+            "logging": {
+                "level": "INFO",
+                "file": "trading_engine.log",
+                "modules": {
+                    "src.execution.brokers.gemini": "DEBUG"
+                }
+            }
         }
+        
+        # Configure logging with default settings
+        logging_config = default_config.get("logging", {})
+        logging_level = getattr(logging, logging_config.get("level", "INFO"))
+        
+        # Reset root logger
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+            
+        logging.basicConfig(
+            level=logging_level,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.StreamHandler(),
+                logging.FileHandler(logging_config.get("file", "trading_engine.log"))
+            ]
+        )
+        
+        # Set specific loggers based on configuration
+        for module, level in logging_config.get("modules", {}).items():
+            logging.getLogger(module).setLevel(getattr(logging, level))
+            
+        logger.info(f"Logging configured with default settings at {logging_level} level")
+        
+        return default_config
 
 
 async def setup_services(config: Dict[str, Any]):
