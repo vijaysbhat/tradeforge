@@ -204,7 +204,8 @@ class TradingEngine:
                                     ask=float(ticker_data.get("ask", 0)),
                                     last=float(ticker_data.get("price", 0)),
                                     volume_24h=float(ticker_data.get("volume", 0)),
-                                    timestamp=datetime.datetime.now()
+                                    timestamp=datetime.datetime.now(),
+                                    raw_data=ticker_data
                                 )
                                 self._ticker_callback(ticker, symbol, provider)
                         except Exception as e:
