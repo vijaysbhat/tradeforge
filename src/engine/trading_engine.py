@@ -264,7 +264,8 @@ class TradingEngine:
                                             price=float(event.get("price", 0)),
                                             amount=float(event.get("amount", 0)),
                                             side="buy" if event.get("makerSide") == "sell" else "sell",
-                                            timestamp=datetime.datetime.now()
+                                            timestamp=datetime.datetime.now(),
+                                            raw_data=event
                                         )
                                         self._trades_callback(trade, symbol, provider)
                         except Exception as e:
