@@ -265,8 +265,9 @@ async def test_sma_buy_signal_generation(trading_environment):
 @pytest.mark.asyncio
 async def test_sma_sell_signal_generation(trading_environment):
     """Test that the SMA strategy generates a sell signal when short MA crosses below long MA."""
-    trading_engine = trading_environment["trading_engine"]
-    strategy = trading_environment["strategy"]
+    environment = await anext(trading_environment)
+    trading_engine = environment["trading_engine"]
+    strategy = environment["strategy"]
     
     # First, set up a position and account balance
     strategy.current_position = 0.5  # Set position in strategy
@@ -354,7 +355,8 @@ async def test_sma_sell_signal_generation(trading_environment):
 @pytest.mark.asyncio
 async def test_trading_engine_processes_signal(trading_environment):
     """Test that the trading engine correctly processes a strategy signal."""
-    trading_engine = trading_environment["trading_engine"]
+    environment = await anext(trading_environment)
+    trading_engine = environment["trading_engine"]
     
     # Create a signal
     signal = StrategySignal(
@@ -389,8 +391,9 @@ async def test_trading_engine_processes_signal(trading_environment):
 @pytest.mark.asyncio
 async def test_position_update_notification(trading_environment):
     """Test that position updates are correctly processed by the strategy."""
-    trading_engine = trading_environment["trading_engine"]
-    strategy = trading_environment["strategy"]
+    environment = await anext(trading_environment)
+    trading_engine = environment["trading_engine"]
+    strategy = environment["strategy"]
     
     # Mock the strategy's on_position_update method
     original_on_position_update = strategy.on_position_update
@@ -419,8 +422,9 @@ async def test_position_update_notification(trading_environment):
 @pytest.mark.asyncio
 async def test_account_update_notification(trading_environment):
     """Test that account updates are correctly processed by the strategy."""
-    trading_engine = trading_environment["trading_engine"]
-    strategy = trading_environment["strategy"]
+    environment = await anext(trading_environment)
+    trading_engine = environment["trading_engine"]
+    strategy = environment["strategy"]
     
     # Mock the strategy's on_account_update method
     original_on_account_update = strategy.on_account_update
@@ -449,8 +453,9 @@ async def test_account_update_notification(trading_environment):
 @pytest.mark.asyncio
 async def test_order_update_notification(trading_environment):
     """Test that order updates are correctly processed by the strategy."""
-    trading_engine = trading_environment["trading_engine"]
-    strategy = trading_environment["strategy"]
+    environment = await anext(trading_environment)
+    trading_engine = environment["trading_engine"]
+    strategy = environment["strategy"]
     
     # Mock the strategy's on_order_update method
     original_on_order_update = strategy.on_order_update
