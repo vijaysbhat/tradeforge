@@ -119,6 +119,9 @@ async def test_sma_buy_signal_generation(trading_setup):
     trading_engine = setup["trading_engine"]
     strategy = setup["strategy"]
     
+    # Make sure account balance is set
+    strategy.account_balance = 10000.0
+    
     # Generate historical candles where short MA is below long MA
     candles = []
     base_time = datetime.datetime.now() - datetime.timedelta(hours=15)
@@ -204,8 +207,9 @@ async def test_sma_sell_signal_generation(trading_setup):
     trading_engine = setup["trading_engine"]
     strategy = setup["strategy"]
     
-    # First, set up a position
+    # First, set up a position and account balance
     strategy.current_position = 0.5  # Set position in strategy
+    strategy.account_balance = 10000.0  # Set account balance
     
     # Generate historical candles where short MA is above long MA
     candles = []

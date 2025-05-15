@@ -119,9 +119,11 @@ class SimpleMovingAverageStrategy(Strategy):
         for balance in account.balances:
             if balance.asset == "USD":
                 self.account_balance = balance.free
+                self.logger.info(f"Account update: USD Balance = ${self.account_balance}")
                 break
         
-        self.logger.info(f"Account update: Balance = ${self.account_balance}")
+        if self.account_balance is None or self.account_balance <= 0:
+            self.logger.warning(f"Account update received but no USD balance found or balance is zero")
     
     def on_timer(self, timestamp: datetime.datetime) -> None:
         """Called periodically by the trading engine."""
