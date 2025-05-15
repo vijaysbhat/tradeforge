@@ -150,14 +150,20 @@ class TradingEngine:
         self.logger.info("Stopping trading engine")
         
         # Unsubscribe from all data feeds
-        for subscription in self.subscriptions:
+        for subscription in self.subscriptions.copy():
             symbol, channel, provider = subscription
-            if channel == "ticker":
-                await self.data_service.unsubscribe_ticker(provider, symbol)
-            elif channel == "orderbook":
-                await self.data_service.unsubscribe_orderbook(provider, symbol)
-            elif channel == "trades":
-                await self.data_service.unsubscribe_trades(provider, symbol)
+            try:
+                if channel == "ticker":
+                    await self.data_service.unsubscribe_ticker(provider, symbol)
+                elif channel == "orderbook":
+                    await self.data_service.unsubscribe_orderbook(provider, symbol)
+                # Skip trades unsubscribe if method doesn't exist
+                # elif channel == "trades":
+                #     await self.data_service.unsubscribe_trades(provider, symbol)
+                
+                self.subscriptions.remove(subscription)
+            except Exception as e:
+                self.logger.error(f"Error unsubscribing from {channel} for {symbol}: {str(e)}")
         
         self.subscriptions.clear()
         
@@ -185,16 +191,22 @@ class TradingEngine:
             
             try:
                 if channel == "ticker":
+                    # Create a callback that includes symbol and provider
+                    ticker_callback = lambda data: self._ticker_callback(data, symbol, provider)
                     await self.data_service.subscribe_ticker(
-                        provider, symbol, self._ticker_callback
+                        provider, symbol, ticker_callback
                     )
                 elif channel == "orderbook":
+                    # Create a callback that includes symbol and provider
+                    orderbook_callback = lambda data: self._orderbook_callback(data, symbol, provider)
                     await self.data_service.subscribe_orderbook(
-                        provider, symbol, self._orderbook_callback
+                        provider, symbol, orderbook_callback
                     )
                 elif channel == "trades":
+                    # Create a callback that includes symbol and provider
+                    trades_callback = lambda data: self._trades_callback(data, symbol, provider)
                     await self.data_service.subscribe_trades(
-                        provider, symbol, self._trades_callback
+                        provider, symbol, trades_callback
                     )
                 
                 self.subscriptions.add(subscription)

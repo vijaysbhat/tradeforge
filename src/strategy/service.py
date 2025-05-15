@@ -69,9 +69,19 @@ class StrategyService:
         Returns:
             Initialized strategy instance or None if loading fails
         """
-        if strategy_id not in self.strategy_classes:
-            self.logger.error(f"Strategy {strategy_id} not found")
-            return None
+        # Check if the strategy_id is a direct class name or a full path
+        if strategy_id in self.strategy_classes:
+            strategy_class = self.strategy_classes[strategy_id]
+        else:
+            # Try to find the strategy by class name only
+            matching_strategies = [sid for sid in self.strategy_classes.keys() 
+                                  if sid.endswith(f".{strategy_id}") or sid.split(".")[-1] == strategy_id]
+            if matching_strategies:
+                strategy_id = matching_strategies[0]
+                strategy_class = self.strategy_classes[strategy_id]
+            else:
+                self.logger.error(f"Strategy {strategy_id} not found")
+                return None
         
         try:
             # Create instance of the strategy
