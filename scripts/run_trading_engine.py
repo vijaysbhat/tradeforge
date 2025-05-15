@@ -149,6 +149,12 @@ async def setup_services(config: Dict[str, Any]):
     # Get global sandbox mode
     use_sandbox = config.get("use_sandbox", True)
     
+    # Get API keys from environment variables
+    gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+    gemini_api_secret = os.environ.get("GEMINI_API_SECRET", "")
+    gemini_sandbox_api_key = os.environ.get("GEMINI_SANDBOX_API_KEY", "")
+    gemini_sandbox_api_secret = os.environ.get("GEMINI_SANDBOX_API_SECRET", "")
+    
     # Register data providers
     for provider_name in config.get("providers", ["gemini"]):
         if provider_name == "gemini":
