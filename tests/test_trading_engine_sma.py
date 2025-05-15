@@ -83,7 +83,8 @@ async def trading_setup():
             quantity=0.0,  # Start with no position
             entry_price=0.0,
             mark_price=10000.0,
-            unrealized_pnl=0.0
+            unrealized_pnl=0.0,
+            raw_data={}  # Add the missing raw_data parameter
         )
     ]
     execution_service.get_positions.return_value = positions
@@ -282,7 +283,8 @@ async def test_position_update_notification(trading_setup):
         quantity=0.2,
         entry_price=10000.0,
         mark_price=10100.0,
-        unrealized_pnl=20.0
+        unrealized_pnl=20.0,
+        raw_data={}  # Add the missing raw_data parameter
     )
     
     # Notify the strategy of the position update

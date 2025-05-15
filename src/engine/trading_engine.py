@@ -442,7 +442,8 @@ class TradingEngine:
                         quantity=0,
                         entry_price=0,
                         mark_price=0,
-                        unrealized_pnl=0
+                        unrealized_pnl=0,
+                        raw_data={}  # Add the missing raw_data parameter
                     )
                     await self._notify_position_update(zero_position, broker_name)
             
