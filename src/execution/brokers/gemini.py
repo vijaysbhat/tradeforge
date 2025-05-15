@@ -28,8 +28,18 @@ class GeminiBroker(Broker):
         # Set the base URL based on sandbox mode
         if sandbox:
             self.base_url = "https://api.sandbox.gemini.com"
+            logging.info("GeminiBroker initialized in SANDBOX mode")
         else:
             self.base_url = "https://api.gemini.com"
+            logging.info("GeminiBroker initialized in PRODUCTION mode")
+            
+        # Validate API keys
+        if not api_key or not api_secret:
+            logging.error(f"Missing API credentials for Gemini broker (sandbox={sandbox})")
+            if sandbox:
+                logging.error("Please set GEMINI_SANDBOX_API_KEY and GEMINI_SANDBOX_API_SECRET environment variables")
+            else:
+                logging.error("Please set GEMINI_API_KEY and GEMINI_API_SECRET environment variables")
             
         self.session = None
         
@@ -114,9 +124,8 @@ class GeminiBroker(Broker):
         # Add required fields to payload
         payload["request"] = endpoint
         
-        # Gemini API expects nonce in microseconds
-        # The error shows server expects seconds, not milliseconds
-        payload["nonce"] = str(int(time.time()))  # Use seconds since epoch as nonce
+        # Gemini API expects nonce in milliseconds
+        payload["nonce"] = str(int(time.time() * 1000))  # Use milliseconds since epoch as nonce
         
         # Encode payload as JSON and then as base64
         encoded_payload = base64.b64encode(json.dumps(payload).encode())
@@ -155,6 +164,7 @@ class GeminiBroker(Broker):
                         logging.error(f"Sandbox mode: {self.sandbox}")
                         logging.error(f"API Key length: {len(self.api_key) if self.api_key else 0}")
                         logging.error(f"API Secret length: {len(self.api_secret) if self.api_secret else 0}")
+                        logging.error(f"Using correct API key for environment: {self.sandbox}")
                     
                     raise Exception(f"Gemini API error: {response.status} - {response_text}")
                 
