@@ -6,6 +6,7 @@ from src.strategy.base import Strategy, StrategySignal
 from src.data.models import Ticker, OrderBook, Trade, Candle
 from src.execution.base import OrderSide, OrderType, OrderStatus
 from src.execution.models import Order, Position, Account
+from src.visualization.chart import TradingChart
 
 
 class SimpleMovingAverageStrategy(Strategy):
@@ -54,9 +55,19 @@ class SimpleMovingAverageStrategy(Strategy):
         # Signal callback
         self.signal_callback = config.get("signal_callback")
         
+        # Visualization settings
+        self.enable_visualization = config.get("enable_visualization", True)
+        self.charts_dir = config.get("charts_dir", "charts")
+        
+        if self.enable_visualization:
+            self.chart = TradingChart(self.symbol, self.charts_dir)
+        else:
+            self.chart = None
+        
         self.logger.info(f"Initialized SimpleMovingAverageStrategy for {self.symbol}")
         self.logger.info(f"Parameters: short_period={self.short_period}, long_period={self.long_period}")
         self.logger.info(f"Running in {'sandbox' if self.sandbox else 'production'} mode")
+        self.logger.info(f"Visualization: {'enabled' if self.enable_visualization else 'disabled'}")
     
     def on_ticker(self, ticker: Ticker, symbol: str, provider: str) -> None:
         """Process ticker updates."""
@@ -86,6 +97,10 @@ class SimpleMovingAverageStrategy(Strategy):
         
         # Add candle to the list
         self.candles[interval].append(candle)
+        
+        # Add candle to chart if visualization is enabled
+        if self.enable_visualization and self.chart:
+            self.chart.add_candle(candle)
         
         # Keep only the necessary number of candles
         max_period = max(self.short_period, self.long_period)
@@ -148,6 +163,10 @@ class SimpleMovingAverageStrategy(Strategy):
         # Calculate long-term moving average
         long_ma = sum(c.close for c in candles[-self.long_period:]) / self.long_period
         
+        # Update chart with moving averages
+        if self.enable_visualization and self.chart:
+            self.chart.update_moving_averages(short_ma, long_ma)
+        
         # Calculate previous short-term moving average
         prev_short_ma = sum(c.close for c in candles[-self.short_period-1:-1]) / self.short_period
         
@@ -159,6 +178,7 @@ class SimpleMovingAverageStrategy(Strategy):
         
         # Check for crossover
         current_time = datetime.datetime.now()
+        current_price = candles[-1].close
         
         # Check if we're in cooldown period
         if self.last_signal_time and current_time - self.last_signal_time < self.signal_cooldown:
@@ -172,6 +192,11 @@ class SimpleMovingAverageStrategy(Strategy):
             if self.current_position is None or self.current_position < 0.000001:
                 self._generate_buy_signal(candles[-1].close)
                 self.last_signal_time = current_time
+                
+                # Add buy signal to chart
+                if self.enable_visualization and self.chart:
+                    self.chart.add_signal(candles[-1].timestamp, current_price, OrderSide.BUY)
+                    self.chart.plot(save=True)
             else:
                 self.logger.info(f"Already have position: {self.current_position}, not buying")
         
@@ -182,6 +207,11 @@ class SimpleMovingAverageStrategy(Strategy):
             if self.current_position is not None and self.current_position > 0.000001:
                 self._generate_sell_signal(candles[-1].close)
                 self.last_signal_time = current_time
+                
+                # Add sell signal to chart
+                if self.enable_visualization and self.chart:
+                    self.chart.add_signal(candles[-1].timestamp, current_price, OrderSide.SELL)
+                    self.chart.plot(save=True)
             else:
                 self.logger.info(f"No position to sell: {self.current_position}")
         else:

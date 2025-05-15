@@ -18,8 +18,14 @@
       "data_provider": "gemini",
       "short_period": 20,
       "long_period": 50,
-      "position_size": 0.1
+      "position_size": 0.1,
+      "enable_visualization": true,
+      "charts_dir": "charts"
     }
   },
-  "symbols": ["BTCUSD", "ETHUSD"]
+  "symbols": ["BTCUSD", "ETHUSD"],
+  "visualization": {
+    "enabled": true,
+    "charts_dir": "charts"
+  }
 }
