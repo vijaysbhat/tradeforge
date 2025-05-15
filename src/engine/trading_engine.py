@@ -6,7 +6,9 @@ from typing import Dict, List, Any, Optional, Set, Callable
 
 from ..data.service import DataService
 from ..data.models import Ticker, OrderBook, Trade, Candle, OrderBookEntry
+from ..data.candle_aggregator import CandleAggregator
 from ..execution.service import ExecutionService
+from ..visualization.chart import TradingChart
 from ..execution.base import OrderSide, OrderType, OrderStatus
 from ..execution.models import Order, Position, Account
 from ..strategy.base import Strategy, StrategySignal
@@ -29,6 +31,10 @@ class TradingEngine:
         self.subscriptions = set()
         self.active_symbols = set()
         self.active_brokers = set()
+        
+        # For candle aggregation and visualization
+        self.candle_aggregators = {}  # Dict of {symbol: {interval: aggregator}}
+        self.charts = {}  # Dict of {symbol: TradingChart}
         
         # For tracking orders and positions
         self.orders: Dict[str, Order] = {}
@@ -74,6 +80,18 @@ class TradingEngine:
                 handler(signal)
             except Exception as e:
                 self.logger.error(f"Error in signal handler: {str(e)}")
+        
+        # Add signal to chart
+        if signal.symbol in self.charts:
+            try:
+                self.charts[signal.symbol].add_signal(
+                    timestamp=signal.timestamp,
+                    price=signal.price or 0,  # Use 0 if price is None
+                    side=signal.side
+                )
+                self.logger.debug(f"Added {signal.side.name} signal to chart for {signal.symbol}")
+            except Exception as e:
+                self.logger.error(f"Error adding signal to chart: {str(e)}")
         
         # Execute the order if a broker is specified
         if signal.broker:
@@ -170,6 +188,18 @@ class TradingEngine:
 
         self.logger.info("Closing all execution services")
         await self.execution_service.close_all()
+        
+        # Save final charts and clean up
+        for symbol, chart in self.charts.items():
+            try:
+                chart.plot(save=True)
+                self.logger.info(f"Saved final chart for {symbol}")
+            except Exception as e:
+                self.logger.error(f"Error saving chart for {symbol}: {str(e)}")
+        
+        # Clear candle aggregators and charts
+        self.candle_aggregators.clear()
+        self.charts.clear()
 
         # Wait for the main loop task to complete
         if hasattr(self, 'main_loop_task') and not self.main_loop_task.done():
@@ -210,7 +240,8 @@ class TradingEngine:
         self.logger.info("Trading engine stopped")
     
     async def subscribe_market_data(self, provider: str, symbol: str, 
-                                   channels: List[str] = None) -> None:
+                                   channels: List[str] = None,
+                                   candle_intervals: List[str] = None) -> None:
         """
         Subscribe to market data for a symbol.
         
@@ -218,9 +249,32 @@ class TradingEngine:
             provider: Data provider name
             symbol: Trading symbol
             channels: List of channels to subscribe to (ticker, orderbook, trades)
+            candle_intervals: List of candle intervals to track (e.g., ["1m", "5m", "15m"])
         """
         if channels is None:
             channels = ["ticker"]
+            
+        # Set up candle aggregators for the requested intervals
+        if candle_intervals:
+            if symbol not in self.candle_aggregators:
+                self.candle_aggregators[symbol] = {}
+                
+            for interval in candle_intervals:
+                if interval not in self.candle_aggregators[symbol]:
+                    self.candle_aggregators[symbol][interval] = CandleAggregator(symbol, interval)
+                    self.logger.info(f"Created candle aggregator for {symbol} at {interval} interval")
+        
+        # If no specific candle intervals requested, create a default 1-minute aggregator
+        elif symbol not in self.candle_aggregators or not self.candle_aggregators[symbol]:
+            if symbol not in self.candle_aggregators:
+                self.candle_aggregators[symbol] = {}
+            self.candle_aggregators[symbol]["1m"] = CandleAggregator(symbol, "1m")
+            self.logger.info(f"Created default 1-minute candle aggregator for {symbol}")
+        
+        # Create a chart for this symbol if it doesn't exist
+        if symbol not in self.charts:
+            self.charts[symbol] = TradingChart(symbol)
+            self.logger.info(f"Created chart for {symbol}")
         
         for channel in channels:
             subscription = (symbol, channel, provider)
@@ -322,7 +376,8 @@ class TradingEngine:
                 self.logger.error(f"Error subscribing to {channel} for {symbol}: {str(e)}")
     
     async def unsubscribe_market_data(self, provider: str, symbol: str, 
-                                     channels: List[str] = None) -> None:
+                                     channels: List[str] = None,
+                                     candle_intervals: List[str] = None) -> None:
         """
         Unsubscribe from market data for a symbol.
         
@@ -357,6 +412,17 @@ class TradingEngine:
         symbol_subscriptions = [(s, c, p) for s, c, p in self.subscriptions if s == symbol]
         if not symbol_subscriptions:
             self.active_symbols.remove(symbol)
+            
+            # Clean up candle aggregators if requested
+            if candle_intervals and symbol in self.candle_aggregators:
+                for interval in candle_intervals:
+                    if interval in self.candle_aggregators[symbol]:
+                        del self.candle_aggregators[symbol][interval]
+                        self.logger.info(f"Removed candle aggregator for {symbol} at {interval} interval")
+                
+                # If no more intervals for this symbol, remove the symbol entry
+                if not self.candle_aggregators[symbol]:
+                    del self.candle_aggregators[symbol]
     
     async def add_broker(self, broker_name: str) -> None:
         """
