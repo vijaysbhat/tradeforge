@@ -192,19 +192,84 @@ class TradingEngine:
             try:
                 if channel == "ticker":
                     # Create a callback that includes symbol and provider
-                    ticker_callback = lambda data: self._ticker_callback(data, symbol, provider)
+                    # Convert raw websocket data to Ticker object
+                    def ticker_callback(data):
+                        try:
+                            # Process the raw websocket data
+                            if isinstance(data, dict) and data.get("type") == "update":
+                                ticker_data = data.get("events", [{}])[0] if data.get("events") else {}
+                                ticker = Ticker(
+                                    symbol=symbol,
+                                    bid=float(ticker_data.get("bid", 0)),
+                                    ask=float(ticker_data.get("ask", 0)),
+                                    last=float(ticker_data.get("price", 0)),
+                                    volume=float(ticker_data.get("volume", 0)),
+                                    timestamp=datetime.datetime.now()
+                                )
+                                self._ticker_callback(ticker, symbol, provider)
+                        except Exception as e:
+                            self.logger.error(f"Error processing ticker data: {str(e)}")
+                    
                     await self.data_service.subscribe_ticker(
                         provider, symbol, ticker_callback
                     )
                 elif channel == "orderbook":
                     # Create a callback that includes symbol and provider
-                    orderbook_callback = lambda data: self._orderbook_callback(data, symbol, provider)
+                    def orderbook_callback(data):
+                        try:
+                            # Process the raw websocket data
+                            if isinstance(data, dict) and data.get("type") == "update":
+                                events = data.get("events", [])
+                                bids = []
+                                asks = []
+                                
+                                for event in events:
+                                    if event.get("side") == "bid":
+                                        bids.append(OrderBookEntry(
+                                            price=float(event.get("price", 0)),
+                                            amount=float(event.get("remaining", 0))
+                                        ))
+                                    elif event.get("side") == "ask":
+                                        asks.append(OrderBookEntry(
+                                            price=float(event.get("price", 0)),
+                                            amount=float(event.get("remaining", 0))
+                                        ))
+                                
+                                orderbook = OrderBook(
+                                    symbol=symbol,
+                                    bids=bids,
+                                    asks=asks,
+                                    timestamp=datetime.datetime.now()
+                                )
+                                self._orderbook_callback(orderbook, symbol, provider)
+                        except Exception as e:
+                            self.logger.error(f"Error processing orderbook data: {str(e)}")
+                    
                     await self.data_service.subscribe_orderbook(
                         provider, symbol, orderbook_callback
                     )
                 elif channel == "trades":
                     # Create a callback that includes symbol and provider
-                    trades_callback = lambda data: self._trades_callback(data, symbol, provider)
+                    def trades_callback(data):
+                        try:
+                            # Process the raw websocket data
+                            if isinstance(data, dict) and data.get("type") == "update":
+                                events = data.get("events", [])
+                                
+                                for event in events:
+                                    if event.get("type") == "trade":
+                                        trade = Trade(
+                                            symbol=symbol,
+                                            id=str(event.get("tid", "")),
+                                            price=float(event.get("price", 0)),
+                                            amount=float(event.get("amount", 0)),
+                                            side="buy" if event.get("makerSide") == "sell" else "sell",
+                                            timestamp=datetime.datetime.now()
+                                        )
+                                        self._trades_callback(trade, symbol, provider)
+                        except Exception as e:
+                            self.logger.error(f"Error processing trade data: {str(e)}")
+                    
                     await self.data_service.subscribe_trades(
                         provider, symbol, trades_callback
                     )
