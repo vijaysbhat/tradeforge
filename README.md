@@ -180,6 +180,61 @@ tradeforge/
 
 Documentation on creating and running trading strategies will be available soon.
 
+## Testing
+
+This project includes automated tests to verify the functionality of the trading engine and strategies.
+
+### Running Tests
+
+To run all tests:
+
+```bash
+python -m pytest
+```
+
+To run specific test files:
+
+```bash
+python -m pytest tests/test_trading_engine_sma.py
+```
+
+To run tests with verbose output:
+
+```bash
+python -m pytest -v
+```
+
+### Test Coverage
+
+To run tests with coverage reporting:
+
+```bash
+python -m pytest --cov=src tests/
+```
+
+### Writing Tests
+
+When adding new features, please include appropriate tests. The project uses pytest and pytest-asyncio for testing asynchronous code.
+
+Example test structure:
+
+```python
+import pytest
+
+@pytest.mark.asyncio
+async def test_something_async():
+    # Setup
+    ...
+    # Test
+    result = await some_async_function()
+    # Assert
+    assert result == expected_value
+```
+
+### Mocking External Services
+
+For tests that would normally require external API connections, use the `unittest.mock` or `pytest-mock` libraries to mock these dependencies. See `tests/test_trading_engine_sma.py` for an example of how to mock the data service and execution service.
+
 ## Development
 
 ### Adding a New Data Provider
