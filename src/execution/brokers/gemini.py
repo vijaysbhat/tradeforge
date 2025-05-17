@@ -5,11 +5,16 @@ import json
 import hmac
 import base64
 import hashlib
+import logging
 import time
 from typing import Dict, List, Any, Optional
 
 from ..base import Broker, OrderType, OrderSide, OrderStatus
 from ..models import Balance, Account, Position, Order, Trade
+
+# Rate limiting constants
+RATE_LIMIT_REQUESTS = 10  # Maximum requests per time window
+RATE_LIMIT_WINDOW = 60.0  # Time window in seconds
 
 
 class GeminiBroker(Broker):
@@ -23,28 +28,95 @@ class GeminiBroker(Broker):
         # Set the base URL based on sandbox mode
         if sandbox:
             self.base_url = "https://api.sandbox.gemini.com"
+            logging.info("GeminiBroker initialized in SANDBOX mode")
         else:
             self.base_url = "https://api.gemini.com"
+            logging.info("GeminiBroker initialized in PRODUCTION mode")
+            
+        # Validate API keys
+        if not api_key or not api_secret:
+            logging.error(f"Missing API credentials for Gemini broker (sandbox={sandbox})")
+            if sandbox:
+                logging.error("Please set GEMINI_SANDBOX_API_KEY and GEMINI_SANDBOX_API_SECRET environment variables")
+            else:
+                logging.error("Please set GEMINI_API_KEY and GEMINI_API_SECRET environment variables")
             
         self.session = None
+        
+        # Rate limiting
+        self.request_timestamps = []
+        self.rate_limit_lock = asyncio.Lock()
     
     async def _ensure_session(self):
         if self.session is None or self.session.closed:
             self.session = aiohttp.ClientSession()
     
     async def _make_public_request(self, endpoint: str, params: Dict = None) -> Dict[str, Any]:
+        # Apply rate limiting
+        await self._apply_rate_limit()
+        
         await self._ensure_session()
         url = f"{self.base_url}{endpoint}"
         
-        async with self.session.get(url, params=params) as response:
-            if response.status != 200:
-                error_text = await response.text()
-                raise Exception(f"Gemini API error: {response.status} - {error_text}")
-            return await response.json()
+        # Debug logging for API request
+        logging.debug(f"Making Gemini public API request to: {url}")
+        logging.debug(f"Sandbox mode: {self.sandbox}")
+        logging.debug(f"Params: {params}")
+        
+        try:
+            async with self.session.get(url, params=params) as response:
+                response_text = await response.text()
+                logging.debug(f"Received response from {url}: {response.status} - {response_text[:200]}...")
+                
+                if response.status != 200:
+                    error_text = response_text
+                    # If we hit rate limit, wait and retry
+                    if response.status == 429:
+                        retry_after = int(response.headers.get('Retry-After', '5'))
+                        await asyncio.sleep(retry_after)
+                        return await self._make_public_request(endpoint, params)
+                    
+                    # Log detailed error information
+                    logging.error(f"Gemini API error for URL: {url}")
+                    logging.error(f"Params: {params}")
+                    logging.error(f"Response: {error_text}")
+                    
+                    raise Exception(f"Gemini API error: {response.status} - {error_text}")
+                return await response.json()
+        except aiohttp.ClientError as e:
+            logging.error(f"Network error when connecting to Gemini API at {url}: {str(e)}")
+            raise Exception(f"Network error when connecting to Gemini API: {str(e)}")
+    
+    async def _apply_rate_limit(self):
+        """Apply rate limiting to avoid hitting API limits."""
+        async with self.rate_limit_lock:
+            current_time = time.time()
+            
+            # Remove timestamps older than the window
+            self.request_timestamps = [ts for ts in self.request_timestamps 
+                                      if current_time - ts < RATE_LIMIT_WINDOW]
+            
+            # If we've hit the rate limit, wait until we can make another request
+            if len(self.request_timestamps) >= RATE_LIMIT_REQUESTS:
+                oldest_timestamp = min(self.request_timestamps)
+                wait_time = RATE_LIMIT_WINDOW - (current_time - oldest_timestamp)
+                if wait_time > 0:
+                    await asyncio.sleep(wait_time)
+            
+            # Add current timestamp to the list
+            self.request_timestamps.append(time.time())
     
     async def _make_private_request(self, endpoint: str, payload: Dict = None) -> Dict[str, Any]:
+        # Apply rate limiting
+        await self._apply_rate_limit()
+        
         await self._ensure_session()
         url = f"{self.base_url}{endpoint}"
+        
+        # Debug logging for API request
+        logging.debug(f"Making Gemini API request to: {url}")
+        logging.debug(f"Sandbox mode: {self.sandbox}")
+        logging.debug(f"API Key: {self.api_key[:5]}...{self.api_key[-5:] if self.api_key else 'None'}")
         
         if payload is None:
             payload = {}
@@ -72,23 +144,41 @@ class GeminiBroker(Broker):
         }
         
         try:
+            logging.debug(f"Sending request to {url} with payload: {json.dumps(payload)}")
             async with self.session.post(url, headers=headers) as response:
                 response_text = await response.text()
+                logging.debug(f"Received response from {url}: {response.status} - {response_text[:200]}...")
+                
                 if response.status != 200:
                     # Check for nonce error and provide a more helpful message
                     if "Nonce" in response_text and "not within" in response_text:
                         raise Exception(f"Gemini API nonce error. Please check your system clock synchronization. Error: {response_text}")
+                    # If we hit rate limit, wait and retry
+                    if response.status == 429:
+                        retry_after = int(response.headers.get('Retry-After', '5'))
+                        await asyncio.sleep(retry_after)
+                        return await self._make_private_request(endpoint, payload)
+                    
+                    # Log detailed error information for API key errors
+                    if "InvalidApiKey" in response_text:
+                        logging.error(f"Invalid API key error for URL: {url}")
+                        logging.error(f"Sandbox mode: {self.sandbox}")
+                        logging.error(f"API Key length: {len(self.api_key) if self.api_key else 0}")
+                        logging.error(f"API Secret length: {len(self.api_secret) if self.api_secret else 0}")
+                        logging.error(f"Using correct API key for environment: {self.sandbox}")
+                    
                     raise Exception(f"Gemini API error: {response.status} - {response_text}")
                 
                 return json.loads(response_text)
         except aiohttp.ClientError as e:
+            logging.error(f"Network error when connecting to Gemini API at {url}: {str(e)}")
             raise Exception(f"Network error when connecting to Gemini API: {str(e)}")
     
     async def get_account_info(self) -> Dict[str, Any]:
-        data = await self._make_private_request("/v1/account")
+        data = await self._make_private_request("/v1/balances")
         
         balances = []
-        for balance in data.get("balances", []):
+        for balance in data:
             balances.append(Balance(
                 asset=balance.get("currency", ""),
                 free=float(balance.get("available", 0)),
@@ -96,7 +186,7 @@ class GeminiBroker(Broker):
             ))
         
         return {
-            "id": data.get("account", {}).get("id", ""),
+            "id": "",  # Balances endpoint doesn't return account ID
             "balances": balances,
             "raw_data": data
         }

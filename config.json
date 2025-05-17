@@ -1,0 +1,31 @@
+{
+  "use_sandbox": true,
+  "providers": ["gemini"],
+  "brokers": ["gemini"],
+  "logging": {
+    "level": "INFO",
+    "file": "trading_engine.log",
+    "modules": {
+      "src.execution.brokers.gemini": "INFO",
+      "src.data.providers.gemini": "INFO",
+      "src.engine.trading_engine": "INFO"
+    }
+  },
+  "strategies": {
+    "simple_moving_average": {
+      "symbol": "BTCUSD",
+      "broker": "gemini",
+      "data_provider": "gemini",
+      "short_period": 20,
+      "long_period": 50,
+      "position_size": 0.1,
+      "enable_visualization": true,
+      "charts_dir": "charts"
+    }
+  },
+  "symbols": ["BTCUSD", "ETHUSD"],
+  "visualization": {
+    "enabled": true,
+    "charts_dir": "charts"
+  }
+}

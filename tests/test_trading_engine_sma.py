@@ -1,0 +1,490 @@
+import asyncio
+import datetime
+from unittest.mock import Mock, AsyncMock
+import pytest
+import logging
+import traceback
+import sys
+import warnings
+
+from src.data.models import Candle, Ticker, OrderBook, Trade
+from src.data.service import DataService
+from src.execution.service import ExecutionService
+from src.execution.base import OrderSide, OrderType, OrderStatus
+from src.execution.models import Order, Position, Account, Balance
+from src.engine.trading_engine import TradingEngine
+from src.strategy.base import StrategySignal
+from src.strategy.service import StrategyService
+from strategies.simple_moving_average import SimpleMovingAverageStrategy
+
+# Configure asyncio to show more detailed warnings about pending tasks
+warnings.filterwarnings(
+    "always",
+    message=r"coroutine '.*' was never awaited",
+    category=RuntimeWarning
+)
+
+# Enable asyncio debug mode to get more detailed task information
+asyncio.get_event_loop().set_debug(True)
+
+
+@pytest.fixture
+async def trading_environment():
+    """Combined fixture for trading setup and cleanup to ensure proper task management."""
+    logging.info("Setting up trading environment")
+    
+    # Create mock services
+    data_service = Mock(spec=DataService)
+    execution_service = Mock(spec=ExecutionService)
+    strategy_service = Mock(spec=StrategyService)
+    
+    # Set up async methods as AsyncMock
+    data_service.get_candles = AsyncMock()
+    data_service.close_all = AsyncMock()
+    execution_service.place_order = AsyncMock()
+    execution_service.get_account_info = AsyncMock()
+    execution_service.get_positions = AsyncMock()
+    execution_service.get_orders = AsyncMock()
+    execution_service.close_all = AsyncMock()
+    
+    # Create the trading engine with mocked services
+    trading_engine = TradingEngine(
+        data_service=data_service,
+        execution_service=execution_service,
+        strategy_service=strategy_service
+    )
+    
+    # Create the SMA strategy
+    strategy = SimpleMovingAverageStrategy()
+    
+    # Mock the strategy service to return our strategy
+    strategy_service.get_all_strategies.return_value = {
+        "SimpleMovingAverageStrategy": strategy
+    }
+    
+    # Configure the strategy
+    strategy_config = {
+        "symbol": "btcusd",
+        "broker": "gemini",
+        "data_provider": "gemini",
+        "short_period": 5,
+        "long_period": 10,
+        "position_size": 0.1,
+        "signal_callback": trading_engine._process_signal
+    }
+    strategy.initialize(strategy_config)
+    
+    # Mock the _execute_signal method to avoid actual order execution
+    trading_engine._execute_signal = AsyncMock()
+    
+    # Set up mock account data
+    account = Account(
+        id="test_account",
+        balances=[
+            Balance(asset="USD", free=10000.0, locked=0.0),
+            Balance(asset="BTC", free=1.0, locked=0.0)
+        ],
+        raw_data={}
+    )
+    execution_service.get_account_info.return_value = account
+    
+    # Set up mock positions data
+    positions = [
+        Position(
+            symbol="btcusd",
+            quantity=0.0,  # Start with no position
+            entry_price=0.0,
+            mark_price=10000.0,
+            unrealized_pnl=0.0,
+            raw_data={}
+        )
+    ]
+    execution_service.get_positions.return_value = positions
+    
+    # Set up mock orders data
+    execution_service.get_orders.return_value = []
+    
+    await trading_engine.start()
+    
+    logging.info("Trading engine started")
+    
+    # Create a setup dictionary
+    setup = {
+        "trading_engine": trading_engine,
+        "strategy": strategy,
+        "data_service": data_service,
+        "execution_service": execution_service,
+        "strategy_service": strategy_service
+    }
+    
+    try:
+        # Yield the setup to the test
+        yield setup
+    finally:
+        # This will always run after the test completes
+        logging.info("Test completed, cleaning up")
+        
+        # Log all pending tasks before stopping the engine
+        pending_before_stop = [t for t in asyncio.all_tasks() 
+                              if t is not asyncio.current_task() and not t.done()]
+        
+        if pending_before_stop:
+            logging.warning(f"Found {len(pending_before_stop)} pending tasks before stopping engine:")
+            for i, task in enumerate(pending_before_stop):
+                logging.warning(f"  Task {i+1}: name={task.get_name()}, coro={task.get_coro()}")
+        
+        # Stop the trading engine
+        logging.info("Stopping trading engine")
+        await trading_engine.stop()
+        logging.info("Trading engine stopped")
+        
+        # Allow a short time for any remaining tasks to clean up
+        await asyncio.sleep(0.1)
+        
+        # Get all pending tasks after stopping the engine
+        pending_tasks = [t for t in asyncio.all_tasks()
+                        if t is not asyncio.current_task() and not t.done()]
+        
+        if pending_tasks:
+            logging.warning(f"Found {len(pending_tasks)} pending tasks after stopping engine:")
+            for i, task in enumerate(pending_tasks):
+                logging.warning(f"  Task {i+1}: name={task.get_name()}, coro={task.get_coro()}")
+            
+            # Cancel all pending tasks
+            for task in pending_tasks:
+                task.cancel()
+            
+            # Wait for all tasks to complete with a timeout
+            try:
+                # Wait for all tasks to be cancelled
+                await asyncio.wait(pending_tasks, timeout=0.5)
+            except Exception as e:
+                logging.debug(f"Error waiting for tasks to cancel: {e}")
+        
+        # Check if any tasks are still pending after cancellation
+        final_tasks = [t for t in asyncio.all_tasks() 
+                      if t is not asyncio.current_task() and not t.done()]
+        
+        if final_tasks:
+            logging.error(f"Still have {len(final_tasks)} pending tasks after cancellation:")
+            for i, task in enumerate(final_tasks):
+                logging.error(f"  Task {i+1}: name={task.get_name()}, coro={task.get_coro()}")
+        
+        logging.info("Cleanup complete")
+
+
+
+@pytest.mark.asyncio
+async def test_sma_buy_signal_generation(trading_environment):
+    """Test that the SMA strategy generates a buy signal when short MA crosses above long MA."""
+    environment = await anext(trading_environment)
+    trading_engine = environment["trading_engine"]
+    strategy = environment["strategy"]
+    
+    # Make sure account balance is set
+    strategy.account_balance = 10000.0
+    
+    # Generate historical candles where short MA is below long MA
+    candles = []
+    base_time = datetime.datetime.now() - datetime.timedelta(hours=15)
+    
+    # Create initial candles with consistent prices for long MA calculation
+    for i in range(10):  # Long period is 10
+        candle = Candle(
+            symbol="btcusd",
+            timestamp=base_time + datetime.timedelta(hours=i),
+            open=10000.0,
+            high=10100.0,
+            low=9900.0,
+            close=10000.0,  # Consistent price for long MA
+            volume=10.0
+        )
+        candles.append(candle)
+    
+    # Then create candles with lower prices for recent short MA
+    for i in range(4):  # 4 of the 5 short period candles
+        candle = Candle(
+            symbol="btcusd",
+            timestamp=base_time + datetime.timedelta(hours=10+i),
+            open=9800.0,
+            high=9850.0,
+            low=9750.0,
+            close=9800.0,  # Lower price for short MA
+            volume=10.0
+        )
+        candles.append(candle)
+    
+    # Feed historical candles to the strategy
+    for candle in candles:
+        strategy.on_candle(candle, "btcusd", "1h", "gemini")
+ 
+    # Reset the mock to track new calls
+    trading_engine._execute_signal.reset_mock()
+    
+    # Add one more candle to complete the short MA period
+    candle = Candle(
+        symbol="btcusd",
+        timestamp=base_time + datetime.timedelta(hours=14),
+        open=9800.0,
+        high=9850.0,
+        low=9750.0,
+        close=9800.0,  # Last candle of the initial short MA
+        volume=10.0
+    )
+    strategy.on_candle(candle, "btcusd", "1h", "gemini")
+    
+    # Now create candles with extremely high prices to force a crossover
+    # This will make the short MA cross above the long MA
+    for i in range(5):
+        candle = Candle(
+            symbol="btcusd",
+            timestamp=base_time + datetime.timedelta(hours=15+i),
+            open=10500.0,
+            high=11000.0,
+            low=10400.0,
+            close=10500.0 + (i * 500),  # Very high prices to ensure crossover
+            volume=15.0
+        )
+        strategy.on_candle(candle, "btcusd", "1h", "gemini")
+    
+    # Verify a buy signal was generated and executed
+    assert trading_engine._execute_signal.called, "No signal was executed"
+    
+    # Get the signal that was passed to execute_signal
+    signal = trading_engine._execute_signal.call_args[0][0]
+    
+   # Verify signal properties
+    assert signal.symbol == "btcusd"
+    assert signal.side == OrderSide.BUY
+    assert signal.order_type == OrderType.MARKET
+    assert signal.broker == "gemini"
+    assert signal.strategy_id == "SimpleMovingAverageStrategy"
+    assert "MA_CROSSOVER_BUY" in signal.metadata.get("reason", "")
+
+
+@pytest.mark.asyncio
+async def test_sma_sell_signal_generation(trading_environment):
+    """Test that the SMA strategy generates a sell signal when short MA crosses below long MA."""
+    environment = await anext(trading_environment)
+    trading_engine = environment["trading_engine"]
+    strategy = environment["strategy"]
+    
+    # First, set up a position and account balance
+    strategy.current_position = 0.5  # Set position in strategy
+    strategy.account_balance = 10000.0  # Set account balance
+    
+    # Generate historical candles where short MA is above long MA
+    candles = []
+    base_time = datetime.datetime.now() - datetime.timedelta(hours=15)
+    
+    # Create initial candles with consistent prices for long MA calculation
+    for i in range(10):  # Long period is 10
+        candle = Candle(
+            symbol="btcusd",
+            timestamp=base_time + datetime.timedelta(hours=i),
+            open=10000.0,
+            high=10100.0,
+            low=9900.0,
+            close=10000.0,  # Consistent price for long MA
+            volume=10.0
+        )
+        candles.append(candle)
+    
+    # Then create candles with higher prices for recent short MA
+    for i in range(4):  # 4 of the 5 short period candles
+        candle = Candle(
+            symbol="btcusd",
+            timestamp=base_time + datetime.timedelta(hours=10+i),
+            open=10500.0,
+            high=10600.0,
+            low=10400.0,
+            close=10500.0,  # Higher price for short MA
+            volume=10.0
+        )
+        candles.append(candle)
+    
+    # Feed historical candles to the strategy
+    for candle in candles:
+        strategy.on_candle(candle, "btcusd", "1h", "gemini")
+    
+    # Reset the mock to track new calls
+    trading_engine._execute_signal.reset_mock()
+    
+    # Add one more candle to complete the short MA period
+    candle = Candle(
+        symbol="btcusd",
+        timestamp=base_time + datetime.timedelta(hours=14),
+        open=10500.0,
+        high=10600.0,
+        low=10400.0,
+        close=10500.0,  # Last candle of the initial short MA
+        volume=10.0
+    )
+    strategy.on_candle(candle, "btcusd", "1h", "gemini")
+    
+    # Now create candles with extremely low prices to force a crossover
+    # This will make the short MA cross below the long MA
+    for i in range(5):
+        candle = Candle(
+            symbol="btcusd",
+            timestamp=base_time + datetime.timedelta(hours=15+i),
+            open=9500.0,
+            high=9600.0,
+            low=9400.0,
+            close=9500.0 - (i * 500),  # Very low prices to ensure crossover
+            volume=15.0
+        )
+        strategy.on_candle(candle, "btcusd", "1h", "gemini")
+    
+    # Verify a sell signal was generated and executed
+    assert trading_engine._execute_signal.called, "No signal was executed"
+    
+    # Get the signal that was passed to execute_signal
+    signal = trading_engine._execute_signal.call_args[0][0]
+    
+    # Verify signal properties
+    assert signal.symbol == "btcusd"
+    assert signal.side == OrderSide.SELL
+    assert signal.order_type == OrderType.MARKET
+    assert signal.quantity == 0.5  # Should sell the entire position
+    assert signal.broker == "gemini"
+    assert signal.strategy_id == "SimpleMovingAverageStrategy"
+    assert "MA_CROSSOVER_SELL" in signal.metadata.get("reason", "")
+
+
+@pytest.mark.asyncio
+async def test_trading_engine_processes_signal(trading_environment):
+    """Test that the trading engine correctly processes a strategy signal."""
+    environment = await anext(trading_environment)
+    trading_engine = environment["trading_engine"]
+    
+    # Create a signal
+    signal = StrategySignal(
+        symbol="btcusd",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        quantity=0.1,
+        broker="gemini",
+        strategy_id="SimpleMovingAverageStrategy"
+    )
+    
+    # Add metadata after creation
+    signal.metadata = {"reason": "TEST_SIGNAL"}
+    
+    # Process the signal
+    trading_engine._process_signal(signal)
+    
+    # Verify the signal was passed to execute_signal
+    trading_engine._execute_signal.assert_called_once()
+    executed_signal = trading_engine._execute_signal.call_args[0][0]
+    
+    # Verify signal properties
+    assert executed_signal.symbol == "btcusd"
+    assert executed_signal.side == OrderSide.BUY
+    assert executed_signal.order_type == OrderType.MARKET
+    assert executed_signal.quantity == 0.1
+    assert executed_signal.broker == "gemini"
+    assert executed_signal.strategy_id == "SimpleMovingAverageStrategy"
+    assert executed_signal.metadata.get("reason") == "TEST_SIGNAL"
+
+
+@pytest.mark.asyncio
+async def test_position_update_notification(trading_environment):
+    """Test that position updates are correctly processed by the strategy."""
+    environment = await anext(trading_environment)
+    trading_engine = environment["trading_engine"]
+    strategy = environment["strategy"]
+    
+    # Mock the strategy's on_position_update method
+    original_on_position_update = strategy.on_position_update
+    strategy.on_position_update = Mock()
+    
+    # Create a position update
+    position = Position(
+        symbol="btcusd",
+        quantity=0.2,
+        entry_price=10000.0,
+        mark_price=10100.0,
+        unrealized_pnl=20.0,
+        raw_data={}  # Add the missing raw_data parameter
+    )
+    
+    # Notify the strategy of the position update
+    await trading_engine._notify_position_update(position, "gemini")
+    
+    # Verify the strategy received the position update
+    strategy.on_position_update.assert_called_once_with(position, "gemini")
+    
+    # Restore original method
+    strategy.on_position_update = original_on_position_update
+
+
+@pytest.mark.asyncio
+async def test_account_update_notification(trading_environment):
+    """Test that account updates are correctly processed by the strategy."""
+    environment = await anext(trading_environment)
+    trading_engine = environment["trading_engine"]
+    strategy = environment["strategy"]
+    
+    # Mock the strategy's on_account_update method
+    original_on_account_update = strategy.on_account_update
+    strategy.on_account_update = Mock()
+    
+    # Create an account update
+    account = Account(
+        id="test_account",
+        balances=[
+            Balance(asset="USD", free=9500.0, locked=500.0),
+            Balance(asset="BTC", free=1.1, locked=0.0)
+        ],
+        raw_data={}  # Add the missing raw_data parameter
+    )
+    
+    # Notify the strategy of the account update
+    await trading_engine._notify_account_update(account, "gemini")
+    
+    # Verify the strategy received the account update
+    strategy.on_account_update.assert_called_once_with(account, "gemini")
+    
+    # Restore original method
+    strategy.on_account_update = original_on_account_update
+
+
+@pytest.mark.asyncio
+async def test_order_update_notification(trading_environment):
+    """Test that order updates are correctly processed by the strategy."""
+    environment = await anext(trading_environment)
+    trading_engine = environment["trading_engine"]
+    strategy = environment["strategy"]
+    
+    # Mock the strategy's on_order_update method
+    original_on_order_update = strategy.on_order_update
+    strategy.on_order_update = Mock()
+    
+    # Create an order update
+    order = Order(
+        id="order123",
+        client_order_id="client123",
+        symbol="btcusd",
+        side=OrderSide.BUY,
+        type=OrderType.MARKET,
+        quantity=0.1,
+        price=None,
+        stop_price=None,
+        status=OrderStatus.FILLED,
+        created_at=datetime.datetime.now(),
+        updated_at=datetime.datetime.now(),
+        filled_quantity=0.1,
+        average_price=10050.0,
+        time_in_force="GTC",
+        raw_data={"strategy_id": "SimpleMovingAverageStrategy"}  # Changed metadata to raw_data
+    )
+    
+    # Notify the strategy of the order update
+    await trading_engine._notify_order_update(order, "gemini")
+    
+    # Verify the strategy received the order update
+    strategy.on_order_update.assert_called_once_with(order, "gemini")
+    
+    # Restore original method
+    strategy.on_order_update = original_on_order_update

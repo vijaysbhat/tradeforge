@@ -180,6 +180,61 @@ tradeforge/
 
 Documentation on creating and running trading strategies will be available soon.
 
+## Testing
+
+This project includes automated tests to verify the functionality of the trading engine and strategies.
+
+### Running Tests
+
+To run all tests:
+
+```bash
+python -m pytest
+```
+
+To run specific test files:
+
+```bash
+python -m pytest tests/test_trading_engine_sma.py
+```
+
+To run tests with verbose output:
+
+```bash
+python -m pytest -v
+```
+
+### Test Coverage
+
+To run tests with coverage reporting:
+
+```bash
+python -m pytest --cov=src tests/
+```
+
+### Writing Tests
+
+When adding new features, please include appropriate tests. The project uses pytest and pytest-asyncio for testing asynchronous code.
+
+Example test structure:
+
+```python
+import pytest
+
+@pytest.mark.asyncio
+async def test_something_async():
+    # Setup
+    ...
+    # Test
+    result = await some_async_function()
+    # Assert
+    assert result == expected_value
+```
+
+### Mocking External Services
+
+For tests that would normally require external API connections, use the `unittest.mock` or `pytest-mock` libraries to mock these dependencies. See `tests/test_trading_engine_sma.py` for an example of how to mock the data service and execution service.
+
 ## Development
 
 ### Adding a New Data Provider
@@ -189,6 +244,115 @@ To add a new market data provider, create a new class that implements the `Marke
 ### Adding a New Broker
 
 To add a new broker for order execution, create a new class that implements the `Broker` interface in `src/execution/base.py`.
+
+## Visualization
+
+TradeForge includes built-in visualization capabilities to help you monitor and analyze your trading strategies in real-time.
+
+### Enabling Visualization
+
+Visualization is configured in the `config.json` file:
+
+```json
+"visualization": {
+  "enabled": true,
+  "charts_dir": "charts"
+}
+```
+
+You can also enable or disable visualization for specific strategies:
+
+```json
+"strategies": {
+  "simple_moving_average": {
+    ...
+    "enable_visualization": true,
+    "charts_dir": "charts"
+  }
+}
+```
+
+### What Gets Visualized
+
+The visualization system creates charts that include:
+
+1. Price candlesticks
+2. Moving averages (short and long term)
+3. Buy signals (green triangles)
+4. Sell signals (red triangles)
+
+Charts are automatically generated and saved whenever a trading signal occurs.
+
+### Viewing Charts
+
+#### Option 1: View Saved Charts
+
+Charts are saved to the `charts` directory (or the directory specified in your config) as PNG files. You can open these files with any image viewer.
+
+#### Option 2: Real-time Chart Viewer
+
+To view charts in real-time as they're generated:
+
+```bash
+python scripts/view_charts.py --symbol BTCUSD
+```
+
+Options:
+- `--symbol`: The trading symbol to display (default: BTCUSD)
+- `--charts-dir`: Directory containing chart images (default: charts)
+- `--interval`: Update interval in seconds (default: 5)
+
+Example:
+```bash
+python scripts/view_charts.py --symbol ETHUSD --interval 2
+```
+
+### How the Visualization Works
+
+The visualization system works by:
+
+1. The trading engine writes trading data (candles, indicators, signals) to JSON files in the `charts/data` directory
+2. The view_charts.py script reads these files and creates real-time visualizations
+3. Charts are also saved as PNG images in the `charts` directory
+
+This approach allows you to view charts in a separate process from the trading engine.
+
+### Customizing Visualization
+
+You can customize the visualization by modifying the `src/visualization/chart.py` file:
+
+- Change colors and styles
+- Add additional indicators
+- Modify chart layout and dimensions
+
+### Adding Visualization to Custom Strategies
+
+When creating custom strategies, you can add visualization support by:
+
+1. Initialize the chart in your strategy's `initialize` method:
+   ```python
+   if self.enable_visualization:
+       self.chart = TradingChart(self.symbol, self.charts_dir)
+   ```
+
+2. Add candles to the chart in your `on_candle` method:
+   ```python
+   if self.enable_visualization and self.chart:
+       self.chart.add_candle(candle)
+   ```
+
+3. Update indicators in your signal generation logic:
+   ```python
+   if self.enable_visualization and self.chart:
+       self.chart.update_moving_averages(short_ma, long_ma)
+   ```
+
+4. Add trading signals when they're generated:
+   ```python
+   if self.enable_visualization and self.chart:
+       self.chart.add_signal(candle.timestamp, price, OrderSide.BUY)
+       self.chart.plot(save=True)
+   ```
 
 ## License
 

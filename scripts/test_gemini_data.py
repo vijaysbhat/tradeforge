@@ -59,7 +59,7 @@ async def display_recent_trades(data_service, symbol, limit=10):
         print(f"{timestamp} | {side} | ${trade.price:.2f} | {trade.amount:.6f}")
 
 
-async def display_candles(data_service, symbol, interval="1h", limit=10):
+async def display_candles(data_service, symbol, interval="1m", limit=10):
     """Display historical candles."""
     end_time = datetime.now()
     start_time = end_time - timedelta(hours=limit)
@@ -79,7 +79,8 @@ async def subscribe_to_ticker(data_service, symbol, duration=30):
     """Subscribe to real-time ticker updates for a specified duration."""
     print(f"\n=== {symbol.upper()} Live Ticker Updates (for {duration} seconds) ===")
     
-    async def ticker_callback(data):
+    # Define callback as non-async since it doesn't need to be awaited
+    def ticker_callback(data):
         if "events" in data and data["events"]:
             for event in data["events"]:
                 if event["type"] == "trade":
@@ -109,7 +110,7 @@ async def main():
     parser.add_argument("--sandbox", action="store_true", help="Use Gemini sandbox environment")
     parser.add_argument("--depth", type=int, default=5, help="Order book depth")
     parser.add_argument("--trades", type=int, default=10, help="Number of recent trades to display")
-    parser.add_argument("--interval", default="1h", help="Candle interval (e.g., 1m, 5m, 1h, 1d)")
+    parser.add_argument("--interval", default="1m", help="Candle interval (e.g., 1m, 5m, 1h, 1d)")
     parser.add_argument("--candles", type=int, default=10, help="Number of candles to display")
     parser.add_argument("--live", type=int, default=0, help="Duration in seconds to listen for live updates (0 to skip)")
     

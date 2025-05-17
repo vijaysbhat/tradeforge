@@ -37,19 +37,30 @@ from src.execution.base import OrderSide, OrderType, OrderStatus
 async def display_account_info(execution_service, broker_name):
     """Display account information including balances."""
     print("\n=== Account Information ===")
-    account = await execution_service.get_account_info(broker_name)
-    
-    print(f"Account ID: {account.id}")
-    print("\nBalances:")
-    print("Asset      | Free         | Locked       | Total")
-    print("-" * 50)
-    
-    # Sort balances by total value (descending)
-    sorted_balances = sorted(account.balances, key=lambda b: b.total, reverse=True)
-    
-    for balance in sorted_balances:
-        if balance.total > 0:  # Only show assets with non-zero balance
-            print(f"{balance.asset.ljust(10)} | {balance.free:.8f} | {balance.locked:.8f} | {balance.total:.8f}")
+    try:
+        account = await execution_service.get_account_info(broker_name)
+        
+        print(f"Account ID: {account.id if hasattr(account, 'id') else 'N/A'}")
+        print("\nBalances:")
+        
+        if not hasattr(account, 'balances') or not account.balances:
+            print("No balance information available.")
+            # Print raw account data for debugging
+            print("\nRaw account data:")
+            print(account)
+            return
+            
+        print("Asset      | Free         | Locked       | Total")
+        print("-" * 50)
+        
+        # Sort balances by total value (descending)
+        sorted_balances = sorted(account.balances, key=lambda b: b.total, reverse=True)
+        
+        for balance in sorted_balances:
+            if balance.total > 0:  # Only show assets with non-zero balance
+                print(f"{balance.asset.ljust(10)} | {balance.free:.8f} | {balance.locked:.8f} | {balance.total:.8f}")
+    except Exception as e:
+        print(f"Error displaying account information: {str(e)}")
 
 
 async def display_positions(execution_service, broker_name):
@@ -199,12 +210,16 @@ async def main():
     
     args = parser.parse_args()
     
-    # Get API credentials from args or environment variables
-    api_key = args.api_key or os.environ.get("GEMINI_API_KEY")
-    api_secret = args.api_secret or os.environ.get("GEMINI_API_SECRET")
-    
     # Check if we should use sandbox based on args or environment
     use_sandbox = args.sandbox or os.environ.get("USE_SANDBOX", "").lower() == "true"
+    
+    # Get API credentials from args or environment variables
+    if use_sandbox:
+        api_key = args.api_key or os.environ.get("GEMINI_SANDBOX_API_KEY")
+        api_secret = args.api_secret or os.environ.get("GEMINI_SANDBOX_API_SECRET")
+    else:
+        api_key = args.api_key or os.environ.get("GEMINI_API_KEY")
+        api_secret = args.api_secret or os.environ.get("GEMINI_API_SECRET")
     
     if not api_key or not api_secret:
         print("Error: Gemini API credentials are required. Set GEMINI_API_KEY and GEMINI_API_SECRET "
@@ -223,6 +238,13 @@ async def main():
     broker_name = "gemini"
     execution_service.register_broker(broker_name, gemini_broker)
     
+    # Enable debug logging
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    print(f"Debug logging enabled. API Key length: {len(api_key)}, Secret length: {len(api_secret)}")
+    
     # Display environment information
     env_name = "SANDBOX" if use_sandbox else "PRODUCTION"
     print(f"\n=== Using Gemini {env_name} Environment ===")
@@ -230,7 +252,13 @@ async def main():
     try:
         # Perform the requested action
         if args.action == "account":
-            await display_account_info(execution_service, broker_name)
+            print("Fetching account information...")
+            try:
+                await display_account_info(execution_service, broker_name)
+            except Exception as e:
+                print(f"Error in display_account_info: {e}")
+                import traceback
+                traceback.print_exc()
         
         elif args.action == "positions":
             await display_positions(execution_service, broker_name)

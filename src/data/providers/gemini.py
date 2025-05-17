@@ -92,7 +92,7 @@ class GeminiDataProvider(MarketDataProvider):
         
         return trades
     
-    async def get_candles(self, symbol: str, interval: str, 
+    async def get_candles(self, symbol: str, interval: str = "1m", 
                          start_time: Optional[datetime.datetime] = None,
                          end_time: Optional[datetime.datetime] = None,
                          limit: int = 100) -> List[Dict[str, Any]]:
@@ -189,7 +189,14 @@ class GeminiDataProvider(MarketDataProvider):
                     async for msg in ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             data = json.loads(msg.data)
-                            await callback(data)
+                            # Call callback and handle both async and non-async callbacks
+                            try:
+                                result = callback(data)
+                                # If callback is a coroutine, await it
+                                if asyncio.iscoroutine(result):
+                                    await result
+                            except Exception as e:
+                                print(f"Error in callback: {e}")
                         elif msg.type == aiohttp.WSMsgType.ERROR:
                             print(f"WebSocket error: {msg}")
                             break
